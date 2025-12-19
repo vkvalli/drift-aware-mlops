@@ -1,0 +1,29 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# MLflow artifacts
+mlruns/
+
+# Data / models / experiment outputs
+data/
+models/
+experiments/
+dashboards/
+
+# Logs / secrets
+*.log
+.env
