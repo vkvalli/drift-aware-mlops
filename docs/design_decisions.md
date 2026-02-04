@@ -28,6 +28,7 @@ Streams (Redis Streams)
 - stream:model_update (from trainer)
 - stream:cost (from trainer)
 - stream:label (optional / future, for delayed labels)
+- stream:dlq (internal, invalid schema or poison messages)
 
 Stream Topology
 | Stream | Producer | Consumers | Consumer Group |
@@ -155,3 +156,44 @@ Observability Hooks
 
 Model Versioning Contract
 - Every event carries model_version (input lineage) or new_model_version (output lineage), preserving causal attribution for delayed rewards and post-hoc evaluation.
+
+Error Handling & Resilience (Bus/Schema Guarantees Only)
+
+- Delivery semantics: at-least-once via Redis Streams consumer groups; consumers must be idempotent using action_id/state_id/batch_id keys.
+- Poison message handling: invalid schema or non-parseable payloads are routed to a dead-letter stream (stream:dlq) with error metadata for inspection.
+- Backpressure control: consumers track lag; if lag exceeds thresholds, policy-agent emits defer actions and trainer pauses new work.
+- Schema validation: every consumer validates payloads against schema_versioned readers before processing; invalid versions are rejected to DLQ.
+- Replay safety: deterministic replay uses stream IDs + stored consumer offsets; side effects (training, deployment) are disabled unless replay mode is explicitly enabled.
+
+State Vector Contract (Locked Core + Extensible Extras)
+
+The state event uses a fixed core schema (stable fields required for all policies and experiments) plus an extensible extras namespace for optional signals. Core fields ensure deterministic replay, consistent ablations, and stable policy interfaces; optional fields allow incremental addition of new drift/fairness/uncertainty signals without breaking backward compatibility.
+
+Fixed core fields (always present)
+
+Identifiers / timing
+- state_id, batch_id, window_id
+- decision_timestamp
+- model_version
+
+Availability flags
+- label_available
+- state_mode = ground_truth | proxy
+
+Core signals (compact, numeric-first)
+- drift_core (1–3 numbers max; e.g., PSI_mean, PSI_max, or MMD)
+- perf_core (if labels: accuracy/F1; else: confidence/entropy)
+- fairness_core (if labels: DPD/EOD; else: group_shift_max)
+
+Constraints
+- budget_status (remaining, cooldown flags)
+- label_delay (pending + time since batch)
+
+Extensible extras (optional, namespaced)
+- extras.drift (full per-feature drift, multiple metrics)
+- extras.fairness (per-group metrics tables)
+- extras.perf (calibration breakdowns, per-class metrics)
+- extras.system (queue depth, GPU utilization)
+- extras.debug (anything you don’t want the agent to rely on)
+
+Policy-agent rule: it may only use fixed core fields in the primary thesis experiments. Extras are for later or ablations.
