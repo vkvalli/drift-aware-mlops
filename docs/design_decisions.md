@@ -222,3 +222,39 @@ Required Fields (in action event)
 Execution reporting: Trainer records effective_action_type and executed_as_requested in the emitted cost (or model_update) metadata when the requested action cannot be executed (e.g., insufficient window, cooldown active), along with a reason_code.
 
 Defer accounting: defer emits a cost event to preserve a complete per-decision trace (training costs set to zero in MVP).
+
+Reward / Objectives (Locked Contract)
+
+We optimize retraining decisions using multi-objective signals: accuracy, fairness, operational cost, and energy. The policy is evaluated on a vector of objectives for transparency, with an optional scalarization for training.
+
+Objective Vector (reported for every decision)
+- O_perf: model performance (accuracy/F1 when labels available; proxy metrics otherwise)
+- O_fair: fairness (DPD/EOD when labels available; proxy group-shift otherwise)
+- O_cost: compute cost (estimated_$, train time, latency impact)
+- O_energy: energy footprint (kwh, co2_kg)
+
+Primary Reward (Phase-1 baseline)
+
+A weighted scalarization is used for the policy training loop to enable stable learning under delayed feedback, while all objectives are logged and evaluated as a vector for Pareto analysis:
+
+R = w1 * ΔO_perf - w2 * O_cost - w3 * O_energy - w4 * O_fair_gap - w5 * action_penalty
+
+All objective terms are normalized to comparable scales over a sliding window prior to scalarization.
+
+ΔO_perf is computed relative to the most recent deployed model evaluated on the same window (or proxy-equivalent window when labels are delayed).
+
+O_fair_gap is defined such that higher values indicate worse fairness (e.g., absolute DPD/EOD).
+
+action_penalty discourages unnecessary retraining frequency and oscillation between actions.
+
+Delayed Feedback Handling
+
+When labels are delayed, rewards are computed asynchronously using the label stream and appended to the decision trace using state_id and model_version. The policy-agent does not see these rewards at decision time, preventing leakage.
+
+When both proxy and ground-truth metrics exist for the same decision, ground-truth metrics supersede proxies for reward computation.
+
+Reporting & Evaluation
+
+- Report both scalar reward and the full objective vector.
+- Plot Pareto fronts of (performance, fairness, cost, energy).
+- Use ablations to compare fixed thresholds vs learned policies under identical budgets.
