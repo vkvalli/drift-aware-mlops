@@ -39,6 +39,7 @@ Stream Topology
 | stream:model_update | Trainer | Serving, Logger | serving-cg, logger-cg |
 | stream:cost | Trainer | Logger | logger-cg |
 | stream:label | Ingestion | Monitor (delayed processing) | monitor-label-cg |
+| stream:dlq | Any consumer | Logger / Inspector | dlq-cg |
 
 Event Schemas (minimal fields)
 
@@ -137,6 +138,9 @@ model_update
 cost
 - action_id, train_time_s, estimated_$
 - kwh, co2_kg, latency_impact_ms
+- effective_action_type (optional)
+- executed_as_requested (optional, bool)
+- reason_code (optional)
 - schema_version
 
 label (optional / future)
@@ -197,3 +201,24 @@ Extensible extras (optional, namespaced)
 - extras.debug (anything you don’t want the agent to rely on)
 
 Policy-agent rule: it may only use fixed core fields in the primary thesis experiments. Extras are for later or ablations.
+
+Action Semantics (Locked Contract)
+
+Actions are emitted by the Policy-Agent and consumed by the Trainer. Each action is intent-level (what to do), not an implementation plan (how to do it).
+
+Action Types
+- defer: no training is executed; monitoring continues.
+- fine_tune: update existing model weights on recent data; no architecture changes.
+- partial_retrain: retrain a subset of the model (e.g., last layers, LoRA adapters).
+- full_retrain: train from scratch or from a baseline checkpoint on full training window.
+
+Required Fields (in action event)
+- action_id, state_id
+- action_type
+- cooldown_expires_at
+- model_version
+- schema_version
+
+Execution reporting: Trainer records effective_action_type and executed_as_requested in the emitted cost (or model_update) metadata when the requested action cannot be executed (e.g., insufficient window, cooldown active), along with a reason_code.
+
+Defer accounting: defer emits a cost event to preserve a complete per-decision trace (training costs set to zero in MVP).
