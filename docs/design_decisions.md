@@ -350,3 +350,89 @@ Schema conformance: 100% events valid in normal runs.
 Determinism: replay matches original action sequence and effective_action_type.
 
 Drift sensitivity: detect seeded shifts with expected metric deltas.
+
+Deployment Flow (Compose-first, MVP)
+Goal: run a deterministic, event-driven loop locally with minimal operational overhead while preserving production-like separation of concerns.
+
+Services (docker-compose)
+
+redis (Redis Streams)
+
+ingestion (dataset replay)
+
+monitor (drift + state)
+
+policy-agent (decision engine)
+
+trainer (update executor)
+
+registry-logger (canonical event log + artifacts)
+
+prometheus + grafana (metrics + dashboards)
+
+Startup Order
+
+redis
+
+registry-logger (initializes canonical event log and artifact directories)
+
+ingestion
+
+monitor
+
+policy-agent
+
+trainer
+
+prometheus + grafana
+
+Deployment Steps (local)
+
+docker-compose up redis registry-logger
+
+docker-compose up ingestion monitor policy-agent trainer
+
+docker-compose up prometheus grafana
+
+Runtime Controls
+
+Replay mode toggle (environment variable) disables side effects (training/deploy) while still writing events.
+
+Cooldown enforcement is handled by policy-agent + trainer using cooldown_expires_at.
+
+Model artifacts are written to a versioned registry path; model_version is emitted with every event for traceability.
+
+Service configuration (thresholds, budgets, cooldown durations) is provided via environment variables or versioned config files mounted into containers.
+
+Rollback / Safety
+
+If trainer fails, no model_update is emitted; a reason_code is logged in the cost event.
+
+If drift_core exceeds thresholds with no subsequent action, an alert fires (disabled in replay mode).
+
+Registry-logger can reconstruct full decision traces for post-mortem analysis.
+
+Kubernetes orchestration and horizontal scaling are explicitly out of scope for the MVP and left as future work.
+
+Evaluation Protocol — Scope & Experimental Conditions
+
+The evaluation uses offline replay as the primary protocol, with a synthetic online simulation appendix to stress behaviors under bursty drift and varied label delay distributions. Offline replay treats the event log as the source of truth: we re-emit batch and label events in timestamp order, ensuring deterministic processing via Redis Stream IDs and checkpointed consumer offsets. The policy sees only the state vector core fields and never observes rewards at decision time, preserving delayed feedback constraints. Each experiment is run for multiple random seeds (policy initialization and stochastic components where applicable) and fixed budgets to isolate policy effects from resource variance. For comparability, all variants share identical data windows, label delay patterns, and cost/energy models; the only difference is the decision policy (threshold baselines vs learned policy). We report the objective vector per decision and aggregate across time windows.
+
+Datasets and modalities follow the existing benchmark set (tabular, text, image), plus fairness-sensitive variants where labels are available for subgroup metrics. Drift is introduced either through the natural dataset chronology (offline) or through controlled replay perturbations (e.g., injected covariate shift spikes, subgroup distribution shifts, and delayed label arrivals) in the appendix.
+
+The synthetic appendix replays the same log with stochastic perturbations (e.g., burst drift, uneven label latency), to test stability and robustness of action oscillations and budget adherence. We explicitly separate “primary results” (offline replay) from “stress results” (simulation appendix) to keep claims grounded in reproducible evidence.
+
+Evaluation Protocol — Baselines, Metrics, and Plots
+
+We compare the proposed policy against a full baseline set to cover standard practice, fairness-aware triggers, and cost-aware scheduling. Baselines include: (1) Fixed-interval retraining (e.g., every N windows), (2) Drift-threshold retraining (trigger when PSI/MMD exceeds a threshold), (3) No-retrain (serve last model), (4) Fairness-triggered retrain (trigger when DPD/EOD exceeds a threshold), and (5) Cost-aware retrain (trigger when a drift-utility score—expected performance gain minus retraining cost—exceeds a budgeted threshold). The fairness baseline uses static thresholds and does not account for cost or energy trade-offs. All baselines consume the same state core fields and budgets to keep comparisons consistent.
+
+Metrics are reported at two levels: per-decision and aggregate over time. Per-decision metrics include the objective vector components (O_perf, O_fair, O_cost, O_energy), action type, cooldown status, and label delay. Aggregate metrics include cumulative cost/energy, average performance and fairness gaps, action frequency, and oscillation rate. We compute trade-off curves between accuracy/fairness and cost/energy, and report confidence intervals across random seeds and replay runs.
+
+Plots are standardized for comparability:
+- Time-series of O_perf, O_fair, cost/energy, and drift_core.
+- Action timeline with overlay of drift events and cooldown windows.
+- Pareto fronts across (performance, fairness, cost, energy).
+- Budget burn curves comparing policies under fixed budget constraints.
+- Stability plots (action oscillation rate vs drift intensity).
+
+All plots are normalized by decision window to enable comparison across datasets and horizons.
