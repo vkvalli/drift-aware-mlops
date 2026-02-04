@@ -92,6 +92,72 @@ Overall understanding:
 - Why fairness-aware retraining decisions cannot be static
   - Stream data and non-IID client drift make fairness a moving target; static fairness constraints will misfire over time.
 
+Reinforcement Learning for Multi‑Objective Optimization: A Review (Springer, 2025) — strongest grounding for multi‑objective optimization and MORL framing. (link.springer.com)
+Efficient Discovery of Pareto Front for Multi‑Objective RL (C‑MORL) (ICLR 2025) — best technical MORL method paper for Pareto‑front language. (proceedings.iclr.cc)
+MLOps best practices, challenges and maturity models: A systematic literature review (IST 2025) — best production MLOps synthesis and maturity framing. (sciencedirect.com)
+A Multivocal Review of MLOps Practices, Challenges and Open Issues (arXiv 2024) — broad “practice + gray literature” view of MLOps adoption. (dblp.org)
+An analysis of the challenges in the adoption of MLOps (JIK 2025) — direct production‑adoption challenges and empirical practitioner evidence. (sciencedirect.com)
+Machine Learning Operations: A Mapping Study (Springer / SERP 2024) — structured map of challenges + solutions across MLOps stages. (asu.elsevierpure.com)
+Machine learning‑based cloud resource allocation algorithms: a comprehensive comparative review (Frontiers 2025) — good for “RL for systems management” in cloud ops + multi‑objective tradeoffs. (frontiersin.org)
+MOAZ: A Multi‑Objective AutoML‑Zero Framework (GECCO 2023) — useful background for MOO, but less direct to your MLOps/RL gap. (hal.cse.msu.edu)
+
 Mind map:
 
-![alt text](image.png)
+![mindmap](mindmap.svg)
+
+Theme extraction (gap-bridging papers):
+
+1) Production MLOps synthesis (Mapping Study + IST 2025 SLR)
+Papers:
+- Machine Learning Operations: A Mapping Study (Chakraborty et al., SERP 2024 / Springer CCIS 2025).
+- MLOps best practices, challenges and maturity models: A systematic literature review (Zarour et al., IST 2025).
+
+What to extract (evidence-based from abstracts):
+- Common lifecycle stages:
+  - Mapping Study explicitly frames issues across the data manipulation pipeline, model building pipeline, and deployment pipeline.
+  - IST SLR frames MLOps as covering data preparation, model training, deployment, and monitoring, and positions MLOps as spanning the ML life cycle.
+- Monitoring constraints:
+  - IST SLR emphasizes continuous monitoring/feedback loops as a best practice, but does not detail specific constraints in the abstract.
+  - Action item: pull concrete monitoring constraints after reviewing full text (e.g., label latency, observability gaps, noisy metrics).
+- Deployment friction:
+  - Mapping Study highlights challenges in deployment pipeline and recommends solutions; IST SLR flags challenges in maintaining model consistency and scalability.
+  - Action item: extract specific friction sources from full text (e.g., environment drift, handoff gaps).
+- Practice vs research:
+  - IST SLR explicitly targets best practices, challenges, and maturity models and synthesizes lessons from successful/unsuccessful implementations.
+  - Mapping Study’s emphasis on tool-agnostic recommendations implies a gap between tooling assumptions and real-world adoption constraints.
+
+2) RL for systems management (Cloud resource allocation review)
+Paper:
+- Machine learning-based cloud resource allocation algorithms: a comprehensive comparative review (Frontiers 2025).
+
+What to extract:
+- Why RL makes sense under uncertainty:
+  - Review positions deep RL as effective for dynamic environments with multi-dimensional state spaces, temporal dependencies, and continuous adaptation needs.
+- Common state/action/reward patterns:
+  - Review compares algorithms across objectives such as performance, cost, energy efficiency, and QoS; this implies reward formulations often balance these metrics.
+  - Action item: extract explicit state/action/reward formulations from the surveyed algorithms if available in the full text.
+- Stability/safety concerns:
+  - Review discusses convergence properties, scalability limits, and trade-offs across objectives; these are practical stability/deployability concerns for RL in production.
+
+3) MORL grounding (Springer 2025 review)
+Paper:
+- Reinforcement Learning for Multi-Objective Optimization: A Review (He et al., Archives of Computational Methods in Engineering, 2025).
+
+What to extract:
+- Objective framing:
+  - The review classifies multi-objective optimization algorithms (e.g., MOEAs vs other types) and surveys how they combine with RL.
+  - Action item: confirm specific framing approaches (scalarization vs Pareto vs preference-based) in the full text.
+- Constraint handling:
+  - The abstract does not specify constraint methods; confirm in full text.
+- Evaluation of multi-objective policies:
+  - The review notes challenges and future directions but does not detail evaluation metrics in the abstract; confirm in full text.
+
+Citation list (to use in final literature survey):
+- Reinforcement Learning for Multi-Objective Optimization: A Review (Springer, 2025) — strongest grounding for multi-objective optimization and MORL framing. (link.springer.com)
+- Efficient Discovery of Pareto Front for Multi-Objective RL (C-MORL) (ICLR 2025) — best technical MORL method paper for Pareto-front language. (proceedings.iclr.cc)
+- MLOps best practices, challenges and maturity models: A systematic literature review (IST 2025) — best production MLOps synthesis and maturity framing. (sciencedirect.com)
+- A Multivocal Review of MLOps Practices, Challenges and Open Issues (arXiv 2024) — broad “practice + gray literature” view of MLOps adoption. (dblp.org)
+- An analysis of the challenges in the adoption of MLOps (JIK 2025) — direct production-adoption challenges and empirical practitioner evidence. (sciencedirect.com)
+- Machine Learning Operations: A Mapping Study (Springer / SERP 2024) — structured map of challenges + solutions across MLOps stages. (asu.elsevierpure.com)
+- Machine learning-based cloud resource allocation algorithms: a comprehensive comparative review (Frontiers 2025) — good for “RL for systems management” in cloud ops + multi-objective tradeoffs. (frontiersin.org)
+- MOAZ: A Multi-Objective AutoML-Zero Framework (GECCO 2023) — useful background for MOO, but less direct to your MLOps/RL gap. (hal.cse.msu.edu)
