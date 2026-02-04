@@ -258,3 +258,95 @@ Reporting & Evaluation
 - Report both scalar reward and the full objective vector.
 - Plot Pareto fronts of (performance, fairness, cost, energy).
 - Use ablations to compare fixed thresholds vs learned policies under identical budgets.
+
+Observability & Metrics (Expanded)
+
+Goals: detect drift and retraining impacts, ensure decision traceability, and enforce operational budgets (latency, cost, energy).
+
+Core SLIs (per service)
+- Ingestion: batch ingest latency, batch rate, schema validation failures.
+- Monitor: state emission latency, drift metric compute time, label-lag distribution.
+- Policy-Agent: decision latency, action rate by type, action oscillation rate, cooldown overrides.
+- Trainer: training duration, success/failure rate, model_update emission lag.
+- Registry+Logger: event write latency, log backlog, replay throughput.
+
+Event Integrity Metrics
+- Stream lag per consumer group (batch/state/action/model_update/cost/label/dlq).
+- DLQ rate and top reason_code counts.
+- Idempotency replays per action_id/state_id/batch_id.
+
+Model Quality Metrics
+- O_perf and O_fair components over time (proxy vs ground-truth tracked separately).
+- Drift core trends (PSI_mean, PSI_max, or MMD).
+- Fairness proxy shift vs ground-truth deltas when labels arrive.
+
+Cost & Energy Metrics
+- Estimated $ per action and rolling spend.
+- kWh and CO₂ per action and rolling totals.
+- Latency impact per action and service p95/p99.
+
+Decision Traceability
+- Join keys: state_id -> action_id -> model_update -> cost -> labels.
+- Model lineage: model_version and new_model_version tracked across events.
+
+Dashboards (Grafana)
+- Drift & quality dashboard (drift_core, perf_core, fairness_core, proxy vs GT).
+- Decision dashboard (action mix, cooldown events, action oscillation rate).
+- Cost & energy dashboard (per-action + rolling budget burn).
+- Reliability dashboard (stream lag, DLQ, error rates).
+
+Alerts (Prometheus)
+- Stream lag above threshold for any consumer group.
+- DLQ rate spike or recurring reason_code.
+- Drift_core crossing alert threshold for N consecutive decision intervals with no subsequent action.
+- Cost or energy budget burn-rate exceeds planned envelope.
+
+In replay mode, observability metrics are recorded but alerts are disabled to avoid false positives during offline evaluation.
+
+Testing Strategy
+
+Scope: validate correctness of drift metrics, fairness metrics, event schemas, and policy semantics; ensure deterministic replay and safe handling of delayed labels.
+
+Unit Tests
+
+Drift metrics: PSI/KS/MMD calculations on synthetic shifts; verify monotonicity with shift magnitude.
+
+Fairness metrics: DPD/EOD on toy datasets; verify behavior with sparse groups.
+
+Schema validation: all event types validate against versioned schemas; invalid payloads routed to DLQ.
+
+Policy logic: action_type validity, cooldown enforcement, idempotency on repeated action_id.
+
+Integration Tests
+
+End-to-end event chain: batch -> state -> action -> model_update + cost.
+
+Delayed labels: emit label events later; verify reward computation uses ground-truth when available.
+
+Replay determinism: re-run with same stream IDs and offsets; verify identical action sequences and effective_action_type (metric values may differ within numerical tolerance).
+
+E2E Scenario Tests
+
+No-drift steady state: expect defer actions and low costs.
+
+Drift spike: expect fine_tune or retrain depending on constraints.
+
+Fairness shock: fairness_core degrades; expect action shift under same budget.
+
+Cooldown active: verify effective_action_type reflects deferral with reason_code.
+
+Missing fairness signal: verify policy degrades gracefully using performance-only signals.
+
+Performance & Reliability Tests
+
+Stream lag under load; ensure backpressure causes policy to defer.
+
+Trainer failure simulation: ensure DLQ capture and idempotent recovery without duplicate model_update.
+
+Acceptance Criteria
+
+Schema conformance: 100% events valid in normal runs.
+
+Determinism: replay matches original action sequence and effective_action_type.
+
+Drift sensitivity: detect seeded shifts with expected metric deltas.
