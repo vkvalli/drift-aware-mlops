@@ -436,3 +436,24 @@ Plots are standardized for comparability:
 - Stability plots (action oscillation rate vs drift intensity).
 
 All plots are normalized by decision window to enable comparison across datasets and horizons.
+
+Evaluation Protocol — Ablation Study Plan
+
+Goal: isolate the impact of policy inputs, reward terms, and system signals on performance, fairness, and cost/energy trade-offs.
+
+Policy Ablations
+- Remove fairness_core from state: policy uses perf_core + drift_core only, measuring fairness regression under drift.
+- Remove cost/energy terms from reward: O_cost/O_energy excluded from scalarization.
+- Disable cooldown: allow actions every window to quantify oscillation penalties.
+- Replace RL policy with static threshold rules (drift/fairness/cost), using the same state signals but no learning.
+
+System Ablations
+- Disable label stream: policy and rewards rely on proxy metrics only.
+- Disable cost/energy telemetry: set O_cost/O_energy to constant baseline.
+- Remove fairness proxy: fairness_core missing when labels delayed (policy must ignore fairness until labels arrive).
+- Disable budget constraint: allow unrestricted retraining to measure upper-bound performance.
+
+Reporting
+- For each ablation, report objective vector deltas relative to the full system.
+- Highlight which signals reduce oscillation and which improve fairness under drift.
+- Ablations are interpreted qualitatively (directional effects) and quantitatively (objective deltas), rather than optimized for any single metric.
