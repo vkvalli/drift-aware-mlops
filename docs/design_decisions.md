@@ -457,3 +457,48 @@ Reporting
 - For each ablation, report objective vector deltas relative to the full system.
 - Highlight which signals reduce oscillation and which improve fairness under drift.
 - Ablations are interpreted qualitatively (directional effects) and quantitatively (objective deltas), rather than optimized for any single metric.
+
+Threats to Validity
+
+Internal Validity
+- Implementation bias: policy behavior may reflect implementation choices (feature scaling, cooldown logic) rather than algorithmic merit.
+- Replay determinism: subtle ordering differences or race conditions in consumers could alter action sequences.
+- Reward leakage: accidental use of future labels or cost signals at decision time would inflate performance.
+
+These threats are mitigated through deterministic replay, strict schema enforcement, and idempotent event processing.
+
+External Validity
+- Dataset representativeness: benchmark datasets may not reflect production drift patterns or business constraints.
+- System constraints: budgets and label delays are modeled; real systems may have different distributions.
+- Deployment context: results from Compose-based experiments may not fully generalize to large-scale distributed environments.
+
+External validity is partially addressed through heterogeneous datasets and synthetic stress testing, though generalization remains limited.
+
+Construct Validity
+- Proxy metrics: fairness and performance proxies under label delay may not align with ground-truth outcomes.
+- Objective weighting: scalarized rewards may obscure trade-offs despite reporting vector metrics.
+- Drift metrics: PSI/MMD thresholds may not capture all operationally relevant shifts.
+
+We mitigate construct validity risks by reporting both proxy and ground-truth metrics and by analyzing directional rather than absolute effects.
+
+Conclusion Validity
+- Statistical power: limited seeds or windows may inflate variance and reduce confidence in differences.
+- Multiple comparisons: evaluating many baselines and ablations can increase false positives without correction.
+
+We reduce conclusion validity threats by reporting confidence intervals and focusing on consistent trends across seeds and datasets.
+
+Statistical Analysis (Bootstrap-Only)
+
+We use non-parametric bootstrap resampling for all confidence intervals and comparisons, avoiding distributional assumptions. For each policy and dataset, we bootstrap over decision windows and seeds using paired resampling across policies under identical replay conditions to estimate 95% confidence intervals for the objective vector components and aggregate metrics (cumulative cost/energy, average performance/fairness gaps, oscillation rate). Pairwise policy comparisons are reported as bootstrap confidence intervals on the delta of metrics (policy A minus policy B). We focus on effect sizes and interval overlap rather than p-values.
+
+Bootstrap Procedure
+- Resample decision windows with replacement within each run.
+- Resample runs/seeds to reflect policy stochasticity.
+- Aggregate across datasets separately, then report macro-averaged effects.
+
+Reporting
+- 95% bootstrap confidence intervals for each metric and for policy deltas.
+- Median and interquartile range (IQR) for skewed metrics (cost, energy).
+- Emphasis on consistent directional effects across seeds and datasets.
+
+We avoid formal multiple-hypothesis testing and instead interpret bootstrap intervals conservatively, focusing on consistent effects rather than marginal significance.
