@@ -5,3 +5,35 @@ Despite extensive research on data and concept drift detection, cost-aware retra
 Similarly, drift detection and monitoring frameworks provide increasingly robust signals—often under limited or delayed label availability—but typically treat drift detection as a binary trigger for retraining rather than as one of several competing inputs into a principled scheduling policy. In distributed and federated learning settings, recent work highlights group-specific and client-specific concept drift, further complicating fairness preservation, yet these methods focus on adaptation mechanisms rather than end-to-end retraining orchestration within production MLOps pipelines.
 
 As a result, there is currently no unified framework that models model retraining as a sequential, multi-objective decision problem that jointly considers predictive performance, fairness, and operational cost (including computational and energy-related constraints) under real-world drift conditions. In particular, existing systems lack adaptive, policy-based retraining mechanisms that can dynamically balance these objectives over time, account for delayed or partial feedback, and operate within realistic production environments. This gap motivates the development of an autonomous, drift-aware MLOps agent that integrates heterogeneous drift and fairness signals with resource-aware decision-making to determine not only when to retrain models, but also how and to what extent retraining should occur.
+
+next steps:
+
+Continue implementing ingestion → monitor → logger
+
+Option A — Implementation plan
+
+Order of services to build
+
+Minimal first runnable loop
+
+Heuristic baseline first, RL later
+
+Option B — Results chapter skeleton
+
+Section headings
+
+Which plots go where
+
+How evaluation maps to claims
+
+Option C — Policy learning details
+
+First RL/bandit algorithm
+
+Training loop pseudocode
+
+When/how to retrain the policy
+
+If you want my recommendation:
+👉 Option A: Implementation plan — it keeps momentum and turns all this great thinking into something that runs.
+

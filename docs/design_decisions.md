@@ -502,3 +502,5 @@ Reporting
 - Emphasis on consistent directional effects across seeds and datasets.
 
 We avoid formal multiple-hypothesis testing and instead interpret bootstrap intervals conservatively, focusing on consistent effects rather than marginal significance.
+
+Different datasets are used to validate different aspects of the proposed architecture: tabular datasets validate drift and replay behavior, text datasets stress retraining cost asymmetry, cluster traces evaluate cost-aware scheduling, and fairness datasets test subgroup-level trade-offs. No single dataset is expected to validate all system properties.
