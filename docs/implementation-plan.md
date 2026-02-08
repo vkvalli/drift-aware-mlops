@@ -6,7 +6,51 @@
 
 **Architecture:** Compose-first, event-driven services using Redis Streams; registry-logger persists an append-only JSONL log with Redis stream IDs. Schema-first development with Pydantic/dataclasses; strict validation before emit; DLQ for schema mismatches.
 
-**Tech Stack:** Python 3.11, Redis Streams, Docker Compose, Pydantic, pytest.
+**Tech Stack:** Python 3.11, Redis Streams, Docker Compose, Pydantic, pytest, ruff, black, GitHub Actions, pre-commit.
+
+**Changelog:** 2026-02-06 — Added CI/hooks, schema-first enforcement, structured logging, deterministic seeds, healthchecks, and debug endpoints.
+
+---
+
+### Task 0: CI / Git Hooks (Early)
+
+**Files:**
+- Create: `.github/workflows/ci.yml`
+- Create: `.pre-commit-config.yaml`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/test_ci_hooks.py
+from pathlib import Path
+
+
+def test_ci_and_precommit_exist():
+    assert Path(".github/workflows/ci.yml").exists()
+    assert Path(".pre-commit-config.yaml").exists()
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_ci_hooks.py -v`
+Expected: FAIL (files missing)
+
+**Step 3: Write minimal implementation**
+
+- Add a GitHub Action that runs `pytest` on pushes to `main` and on PRs.
+- Add pre-commit with `black` and `ruff` hooks.
+
+**Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_ci_hooks.py -v`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add .github/workflows/ci.yml .pre-commit-config.yaml tests/test_ci_hooks.py
+git commit -m "chore: add CI and pre-commit hooks"
+```
 
 ---
 
@@ -100,6 +144,7 @@ Expected: FAIL (missing services)
 - Keep Prometheus/Grafana intact.
 - `registry-logger` just starts a Python process that sleeps (stub) so container stays alive.
 - Add a minimal `requirements.txt` for registry-logger (redis client + pydantic).
+- Add healthcheck entries for Redis and registry-logger to avoid race start issues.
 
 **Step 4: Run test to verify it passes**
 
@@ -159,7 +204,58 @@ git commit -m "docs: add minimal README with architecture and schemas"
 
 ---
 
-### Task 4: Electricity Tiny Replay Sample (100–500 Batches)
+### Task 4: Pin Dependency Versions Per Service
+
+**Files:**
+- Create: `services/ingestion/requirements.txt`
+- Create: `services/monitor/requirements.txt`
+- Create: `services/policy/requirements.txt`
+- Create: `services/trainer/requirements.txt`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/test_service_requirements.py
+from pathlib import Path
+
+
+def test_service_requirements_pinned():
+    files = [
+        Path("services/ingestion/requirements.txt"),
+        Path("services/monitor/requirements.txt"),
+        Path("services/policy/requirements.txt"),
+        Path("services/trainer/requirements.txt"),
+    ]
+    for f in files:
+        text = f.read_text()
+        assert "==" in text, f"Unpinned deps in {f}"
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_service_requirements.py -v`
+Expected: FAIL (files missing)
+
+**Step 3: Write minimal implementation**
+
+- Add per-service `requirements.txt` with exact versions (e.g., `redis==4.x`, `pydantic==1.10.x`).
+- Keep lists minimal per service.
+
+**Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_service_requirements.py -v`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add services/*/requirements.txt tests/test_service_requirements.py
+git commit -m "chore: pin service dependencies"
+```
+
+---
+
+### Task 5: Electricity Tiny Replay Sample (100–500 Batches)
 
 **Files:**
 - Create: `scripts/make_replay_sample.py`
@@ -202,6 +298,7 @@ Expected: FAIL (files missing)
   - `data/replay/electricity_demo.csv`
   - `data/replay/electricity_demo.meta.json`
 - If the full dataset is not available locally, generate a deterministic synthetic sample with the same column names and a `label_available` flag for delayed labels.
+- The script must accept `--seed` and log it in metadata for determinism.
 
 **Step 4: Run test to verify it passes**
 
@@ -217,7 +314,104 @@ git commit -m "feat: add tiny electricity replay sample"
 
 ---
 
-### Task 5: Smoke Check For Step-1 Readiness
+### Task 6: Schema-First Enforcement + Structured Logging
+
+**Files:**
+- Create: `schemas/events.py`
+- Create: `schemas/logging.py`
+- Create: `tests/test_schema_validation.py`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/test_schema_validation.py
+from schemas.events import BatchEvent
+
+
+def test_batch_event_validation():
+    payload = {
+        "schema_version": "1.0",
+        "event_id": "evt-1",
+        "batch_id": "batch-1",
+        "replay_id": "demo1",
+        "label_available": False,
+        "timestamp": "2026-02-06T00:00:00Z",
+        "data": {"rows": 10},
+    }
+    BatchEvent.model_validate(payload)
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_schema_validation.py -v`
+Expected: FAIL (schemas missing)
+
+**Step 3: Write minimal implementation**
+
+- Implement Pydantic models for events (batch/state/action/model_update/cost/label/dlq) with schema_version.
+- Add structured logging helper to emit JSON logs with fields: `timestamp`, `service`, `level`, `event_id`.
+- Add a helper `validate_or_dlq()` that validates payloads before emit and routes invalid payloads to DLQ.
+- Ensure registry-logger persists JSONL records with Redis stream IDs for traceability.
+
+**Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_schema_validation.py -v`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add schemas tests/test_schema_validation.py
+git commit -m "feat: add event schemas and structured logging"
+```
+
+---
+
+### Task 7: Minimal Debug Endpoints (Monitor + Policy)
+
+**Files:**
+- Create: `services/monitor/debug_server.py`
+- Create: `services/policy/debug_server.py`
+- Test: `tests/test_debug_endpoints.py`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/test_debug_endpoints.py
+from services.monitor.debug_server import build_app as build_monitor_app
+from services.policy.debug_server import build_app as build_policy_app
+
+
+def test_debug_app_builds():
+    assert build_monitor_app() is not None
+    assert build_policy_app() is not None
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_debug_endpoints.py -v`
+Expected: FAIL (files missing)
+
+**Step 3: Write minimal implementation**
+
+- Add a tiny FastAPI or Flask app with `/health` or `/debug` endpoint.
+- Endpoint returns current consumer offsets and last-event IDs (stubbed until services exist).
+
+**Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_debug_endpoints.py -v`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add services/monitor/debug_server.py services/policy/debug_server.py tests/test_debug_endpoints.py
+git commit -m "feat: add debug endpoints for monitor and policy"
+```
+
+---
+
+### Task 8: Smoke Check For Step-1 Readiness
 
 **Files:**
 - Modify: `docs/implementation-plan.md`
