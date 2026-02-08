@@ -27,3 +27,4 @@ dashboards/
 # Logs / secrets
 *.log
 .env
+.worktrees/
