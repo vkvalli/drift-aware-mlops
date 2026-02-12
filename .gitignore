@@ -23,6 +23,8 @@ data/
 models/
 experiments/
 dashboards/
+!tests/data/
+!tests/data/sample.csv
 
 # Logs / secrets
 *.log
