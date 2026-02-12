@@ -1,3 +1,5 @@
+# Design decisions
+
 current benchmark datasets:
 Tabular: Electricity, Airline Delay, Google Cluster Trace
 Text: IMDB, AG News
@@ -17,9 +19,75 @@ Architecture (MVP, Compose-first)
 
 We’ll implement a minimal event-driven MLOps pipeline using Docker Compose and Redis Streams to coordinate five services: ingestion/replay, monitor, policy-agent, trainer/updater, and registry+logger. Each service owns a single responsibility and communicates only via immutable events, enforcing a clean separation between signals, decisions, and outcomes—critical for delayed labels and multi-objective retraining decisions. The Ingestion service reads time-ordered dataset slices and emits batch events (including timestamps, window IDs, and label-availability flags). Monitor consumes batch events, computes drift/performance signals and fairness-related signals when labels are available (or proxy group-shift signals when labels are delayed), and emits state events containing the policy state vector. Policy-Agent consumes state events and emits action events (e.g., defer, fine_tune, partial_retrain, full_retrain), subject to system constraints such as cooldown windows. Trainer consumes action events, runs the requested update routine, and emits model_update and cost events (training time, estimated $ cost, energy/CO₂, and latency impact). Registry+Logger subscribes to all event streams and writes an append-only log for reproducibility, deterministic replay, and post-hoc reward computation. Deterministic replay is supported via Redis Streams IDs, checkpointed consumer offsets, and explicit model_version fields carried through events to preserve causal attribution.
 
+MVP Monitor (Offline, File-Based)
+
+The initial monitor implementation will be a minimal, offline component that reads JSONL events produced by replay. It consumes BatchEvent and LabelEvent records, maintains a sliding reference window of recent batch means, and emits a StateEvent per batch. Drift is a simple absolute mean shift between the current batch mean and the reference mean (single float drift_core), and we also log drift_max for debugging. The monitor logs StateEvents via the JSONL logger with event_type and logged_at fields, and uses the standard s_000001 ID prefix. perf_core and fairness_core are placeholders (0.0) in this MVP to keep the contract stable before full metrics are implemented. This offline monitor does not use Redis yet, but preserves the same event contracts and deterministic ordering so it can be swapped for the stream-based monitor later.
+
+Drift Calculation + Testing (MVP)
+
+Drift signal is an absolute mean shift. For each batch, compute a mean vector over numeric features, excluding non-features: {label, timestamp_start, timestamp_end, row_id}. The reference window uses only the previous W batches (no leakage). For each batch, compute drift_core as mean(abs(mu_current - mu_ref)) and drift_max as max(abs(mu_current - mu_ref)).
+
+Warm-up rule: if fewer than W prior batch means exist, set drift_core=0.0 and drift_ready=False. drift_ready is included in StateEvent to explicitly mark warm-up windows. The reference window uses the last W drift_ready batches only (no leakage). If no numeric feature columns remain after exclusions, drift_core is set to 0.0 and drift_ready=False.
+
+Testing uses a synthetic CSV with a known shift after batch K (e.g., K_shift_batch=3 for 6 batches). Run the monitor on replay output and assert: state_id values are monotonic with s_ prefix; and the number of StateEvent records equals BatchEvent records. For drift, compute pre = drift_core for batches < K_shift_batch and post = drift_core for batches >= K_shift_batch, excluding warm-up batches where drift_ready=False. Assert: max(post) > max(pre) + epsilon and mean(post) > mean(pre) + epsilon (epsilon ~ 1.0 for a ~10 shift). Add a determinism test: run the monitor twice on the same input log and assert the (batch_id, state_id, drift_core) sequences are identical. StateEvents are appended to the same canonical artifacts/events.jsonl log with event_type=\"state\".
+
+Offline Policy + Trainer Stub (MVP)
+
+Policy reads artifacts/states.jsonl and writes artifacts/actions.jsonl (JSONL). It applies a simple threshold rule: if drift_ready=true and drift_core >= T, action_type="fine_tune", else "defer". ActionEvent includes reason (e.g., "drift_threshold"), action_params (empty or {"threshold": T}), and requested_at timestamp. action_id is deterministic via IdCounter seeded by run metadata for replay stability.
+
+Trainer reads artifacts/actions.jsonl and appends to the canonical artifacts/events.jsonl (preferred) using event_type="cost" and event_type="model_update". For every action it emits CostEvent with executed boolean and reason_code ("defer", "ok", "insufficient_data"). For fine_tune, cost fields use dummy non-zero values (train_time_s, estimated_$, kwh, co2_kg); for defer, zeros. ModelUpdateEvent is emitted only for fine_tune and includes executed=true and artifact_path; defer emits no ModelUpdateEvent. The trainer is idempotent: if an action_id is already seen, it skips re-execution and logs no new events.
+
+Tests (summary): Policy—given states.jsonl with drift above/below T, assert actions.jsonl contains expected action types, counts, and action.state_id matches. Trainer—CostEvent emitted for each action; ModelUpdateEvent only for fine_tune. End-to-end—replay → monitor → policy → trainer; assert event ordering (state → action → cost[/model_update]) and expected event counts in the canonical log.
+
+Baseline behavior note: the threshold-only policy can over-trigger fine_tune (e.g., 86/100) and is used here primarily to exercise the pipeline. Future improvements will add cooldown rules, higher thresholds, or drift persistence (N consecutive windows) for more conservative behavior.
+Update: drift persistence is now supported via a consecutive-k rule (default K=3), which reduces fine_tune frequency in the offline ablation runs.
+Primary heuristic baseline: Drift-Threshold + Persistence (K=3). This is the locked baseline policy for evaluation; RL will be compared against it rather than further tuning this heuristic.
+Cost modeling note: costs scale linearly with fine_tunes because the trainer stub uses a fixed per-action cost model; this isolates policy effects on action frequency in the current experiments.
+
+Registry Logger + EventBus (Phase A)
+
+We introduce an EventBus abstraction with two backends: FileBus (JSONL) and RedisBus (later). Phase A implements FileBus only but keeps the interface stable. The registry-logger consumes events from the bus, validates schemas, and appends to the canonical artifacts/events.jsonl log. Idempotency is enforced using synthetic IDs derived from event type + key: batch:{batch_id}, label:{label_id}, state:{state_id}, action:{action_id}, cost:{cost_id}, model_update:{update_id}. A single helper canonical_id(event: dict) is the source of truth; if required keys are missing, the event is routed to DLQ (no guessing).
+
+Checkpointing: store only byte offset in artifacts/checkpoints/registry_logger.json (e.g., {"last_byte_offset": 123456}) plus optional run_id/input_hash. Do not store growing seen-ID sets in checkpoints. Instead, on startup the logger builds seen_ids by scanning the canonical log (acceptable at current scale), or later via an append-only index file.
+
+Canonical log rules: append-only, never rewritten. It may include a single run_meta at the top. When processing multiple inputs, each canonical record can optionally include source_file and source_offset to aid replay/debugging.
+
+Validation: bad event → write DLQ record and continue (no crash). DLQ entries include error_type, error_msg, raw_event, source_offset, logged_at.
+
+Input vs canonical: in Phase A, registry-logger is the only writer to the canonical log. Other components write to their own outputs; the logger consolidates. The offline_run.py merge remains a dev convenience; registry-logger is the stream-ready consolidation path.
+
+Deterministic replay tool: tools/replay.py re-emits events from the canonical log to a FileBus outbox. It supports --from-id/--to-id using the synthetic type:key scheme and applies those bounds by file order (byte offset order), not lexicographic comparison. It can also start from the registry-logger checkpoint’s last_byte_offset. Deterministic mode replays in file order with no timestamp sorting.
+
+Schema Validation Compatibility (Pydantic + Fallback)
+
+We support two validation modes via a centralized compat layer (src/schemas/compat.py). If Pydantic is available, all schemas are Pydantic v1 models and validation is strict. If Pydantic is missing (e.g., sandbox constraints), we fall back to a lightweight stdlib validator that enforces required fields and basic type checks while preserving the same public API. All event producers/consumers use validate_or_dlq so invalid events are routed to DLQ consistently in both modes. Tests use conditional skips for Pydantic-specific behavior to keep CI green in fallback mode.
+Strictness note: when Pydantic is installed, core schema fields use Strict* types (StrictStr/StrictInt/StrictFloat/StrictBool) to prevent silent coercion. This makes the “strict” test behavior explicit and ensures type errors surface early.
+
+Initial experiments on the Electricity dataset show a high retraining frequency when raw numeric features are used directly for drift detection. This is expected, as time-derived features and volatile demand signals introduce non-stationarity that is not semantically meaningful drift. We treat this as a preprocessing and signal-calibration issue within the monitoring layer rather than a failure of the decision framework.
+
 Data Flow (Event Schemas + Stream Topology)
 
 Core principle: immutable, append-only events with explicit schema validation, versioned model lineage, and deterministic replay. Cost events are logged for post-hoc evaluation and delayed reward computation, not for immediate policy state construction. Schema evolution is handled via versioned readers to preserve backward compatibility during replay.
+
+Training / Evaluation Ordering
+
+To avoid optimistic bias, we evaluate on batch t using the previous model before training on batch t. The trainer loads the prior model version, computes accuracy on the incoming batch (if the model has been fit), then applies partial_fit on that batch and saves the updated model. This keeps O_perf aligned with “generalization to new data” and matches the drift + delayed feedback framing.
+
+Baseline Choice (Pareto Pattern)
+
+The latest policy matrix shows a clear cost‑accuracy trade‑off: no_retrain (zero cost, no accuracy), fixed_interval (higher cost, modest accuracy gains), and threshold_persistence (lower cost at comparable accuracy). In particular, threshold_persistence with higher K (e.g., K=5) achieves substantially lower cost while maintaining accuracy comparable to fixed_interval. This “selective retraining reduces cost without sacrificing performance” result motivates using threshold_persistence as the heuristic baseline that RL must improve upon.
+
+<!-- PARETO_TABLE_START -->
+| Policy | Mean Cost (USD) | Mean Accuracy |
+| --- | --- | --- |
+| fixed_interval | 22.50 | 0.6411 |
+| no_retrain | 0.00 | NA |
+| threshold_persistence | 17.25 | 0.6408 |
+<!-- PARETO_TABLE_END -->
+
+Reward Function (RL MVP)
+
+We use a causal, shaped reward to avoid “reward for acting” failure modes. For fine_tune, reward is based on marginal improvement (Δaccuracy) minus normalized cost (and optional energy), with an optional stability penalty for thrashing. For defer, reward is zero by default unless per-batch accuracy decline can be measured, in which case a small missed-opportunity penalty is used. We log pre-update accuracy for every action (including defer) so rewards can be computed consistently offline. This follows RL best practices: dense rewards, minimal shaping, and explicit cost terms to prevent reward hacking and policy collapse.
 
 Streams (Redis Streams)
 - stream:batch (from ingestion)

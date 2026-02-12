@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11, Redis Streams, Docker Compose, Pydantic, pytest, ruff, black, GitHub Actions, pre-commit.
 
-**Changelog:** 2026-02-06 — Added CI/hooks, schema-first enforcement, structured logging, deterministic seeds, healthchecks, and debug endpoints.
+**Changelog:** 2026-02-06 — Added CI/hooks, schema-first enforcement, structured logging, deterministic seeds, healthchecks, debug endpoints, and --max-rows subset mode.
 
 ---
 
@@ -188,6 +188,7 @@ Expected: FAIL (README missing)
 - Create `README.md` with two sections:
   - **Architecture Overview**: short summary copied from `docs/design_decisions.md`.
   - **Event Schemas**: copy the event schema section (batch, state, action, model_update, cost, label, dlq).
+-  - Add `label_delay_batches` to `BatchEvent` in the schema text (one-line note).
 - Keep it concise and link to `docs/design_decisions.md` for full detail.
 
 **Step 4: Run test to verify it passes**
@@ -299,6 +300,7 @@ Expected: FAIL (files missing)
   - `data/replay/electricity_demo.meta.json`
 - If the full dataset is not available locally, generate a deterministic synthetic sample with the same column names and a `label_available` flag for delayed labels.
 - The script must accept `--seed` and log it in metadata for determinism.
+- Emit `label_delay_batches=D` for every batch in the replay output.
 
 **Step 4: Run test to verify it passes**
 

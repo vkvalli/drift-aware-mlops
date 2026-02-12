@@ -23,8 +23,15 @@ data/
 models/
 experiments/
 dashboards/
+!tests/data/
+!tests/data/sample.csv
 
 # Logs / secrets
 *.log
 .env
 .worktrees/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.env

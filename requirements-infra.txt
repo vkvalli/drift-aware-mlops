@@ -1,0 +1,2 @@
+# Used when switching to Redis Streams
+redis==4.6.0

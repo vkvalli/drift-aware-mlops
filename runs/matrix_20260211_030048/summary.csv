@@ -1,0 +1,13 @@
+run_name,policy,threshold,consecutive_k,fixed_interval,cooldown,seed,window_size,ref_window,label_delay_batches,max_rows,batch_count,action_count,fine_tune_count,total_cost_usd,cost_per_update,action_rate
+policy=fixed_interval_N10_cd0_seed111,fixed_interval,0.01,3,10,0,111,200,3,2,5000,25,25,2,3.0,1.5,0.08
+policy=fixed_interval_N10_cd0_seed222,fixed_interval,0.01,3,10,0,222,200,3,2,5000,25,25,2,3.0,1.5,0.08
+policy=fixed_interval_N10_cd0_seed333,fixed_interval,0.01,3,10,0,333,200,3,2,5000,25,25,2,3.0,1.5,0.08
+policy=no_retrain_seed111,no_retrain,0.01,3,10,0,111,200,3,2,5000,25,25,0,0.0,0.0,0.0
+policy=no_retrain_seed222,no_retrain,0.01,3,10,0,222,200,3,2,5000,25,25,0,0.0,0.0,0.0
+policy=no_retrain_seed333,no_retrain,0.01,3,10,0,333,200,3,2,5000,25,25,0,0.0,0.0,0.0
+policy=threshold_persistence_T0.01_K3_cd0_seed111,threshold_persistence,0.01,3,10,0,111,200,3,2,5000,25,25,2,3.0,1.5,0.08
+policy=threshold_persistence_T0.01_K3_cd0_seed222,threshold_persistence,0.01,3,10,0,222,200,3,2,5000,25,25,2,3.0,1.5,0.08
+policy=threshold_persistence_T0.01_K3_cd0_seed333,threshold_persistence,0.01,3,10,0,333,200,3,2,5000,25,25,2,3.0,1.5,0.08
+policy=threshold_persistence_T0.01_K5_cd0_seed111,threshold_persistence,0.01,5,10,0,111,200,3,2,5000,25,25,0,0.0,0.0,0.0
+policy=threshold_persistence_T0.01_K5_cd0_seed222,threshold_persistence,0.01,5,10,0,222,200,3,2,5000,25,25,0,0.0,0.0,0.0
+policy=threshold_persistence_T0.01_K5_cd0_seed333,threshold_persistence,0.01,5,10,0,333,200,3,2,5000,25,25,0,0.0,0.0,0.0

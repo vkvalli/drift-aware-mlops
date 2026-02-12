@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">
+<rect width="640" height="360" fill="white"/>
+<text x="320.0" y="24" text-anchor="middle" font-size="16" font-family="Arial">Accuracy Over Time</text>
+<line x1="50" y1="310" x2="590" y2="310" stroke="#333"/>
+<line x1="50" y1="50" x2="50" y2="310" stroke="#333"/>
+<circle cx="590.0" cy="310.0" r="3" fill="#59a14f"/>
+</svg>

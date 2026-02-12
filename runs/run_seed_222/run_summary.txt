@@ -1,0 +1,10 @@
+events_total=586
+batch_count=100
+state_count=100
+action_count=100
+cost_count=100
+fine_tune_count=86
+total_cost_usd=129.0000
+shift_batch=50
+drift_pre_avg=0.252726
+drift_post_avg=0.264868
