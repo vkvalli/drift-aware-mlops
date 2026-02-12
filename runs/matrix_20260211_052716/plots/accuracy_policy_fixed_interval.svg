@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240">
+<rect width="640" height="240" fill="white"/>
+<text x="320.0" y="24" text-anchor="middle" font-size="16" font-family="Arial">Accuracy Over Time (mean) — fixed_interval</text>
+<line x1="50" y1="190" x2="590" y2="190" stroke="#333"/>
+<line x1="50" y1="50" x2="50" y2="190" stroke="#333"/>
+<circle cx="50.0" cy="131.1" r="3" fill="#59a14f"/>
+<circle cx="185.0" cy="150.7" r="3" fill="#59a14f"/>
+<line x1="50.0" y1="131.1" x2="185.0" y2="150.7" stroke="#59a14f"/>
+<circle cx="320.0" cy="50.0" r="3" fill="#59a14f"/>
+<line x1="185.0" y1="150.7" x2="320.0" y2="50.0" stroke="#59a14f"/>
+<circle cx="455.0" cy="132.0" r="3" fill="#59a14f"/>
+<line x1="320.0" y1="50.0" x2="455.0" y2="132.0" stroke="#59a14f"/>
+<circle cx="590.0" cy="190.0" r="3" fill="#59a14f"/>
+<line x1="455.0" y1="132.0" x2="590.0" y2="190.0" stroke="#59a14f"/>
+</svg>

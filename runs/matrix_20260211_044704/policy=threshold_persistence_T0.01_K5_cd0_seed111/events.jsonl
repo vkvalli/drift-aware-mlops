@@ -1,0 +1,1 @@
+{"event_type": "run_meta", "dataset_id": "electricity", "window_size": 200, "max_rows": 5000, "label_delay_batches": 2, "ref_window": 3, "threshold": 0.01, "policy": "threshold_persistence", "consecutive_k": 5, "fixed_interval": 5, "cooldown": 0, "seed": 111, "git_commit": "7f77897", "created_at": "2026-02-11T12:47:13.959376+00:00"}

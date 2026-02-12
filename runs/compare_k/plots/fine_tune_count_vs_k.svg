@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="300" viewBox="0 0 600 300">
+<text x="300.0" y="20" text-anchor="middle" font-size="14">fine_tune_count vs K</text>
+<rect x="50.0" y="40.0" width="153.33333333333334" height="220.0" fill="#4C78A8"/>
+<text x="126.66666666666667" y="275" text-anchor="middle" font-size="10">K1</text>
+<text x="126.66666666666667" y="35.0" text-anchor="middle" font-size="10">70.00</text>
+<rect x="223.33333333333334" y="146.85714285714286" width="153.33333333333334" height="113.14285714285714" fill="#4C78A8"/>
+<text x="300.0" y="275" text-anchor="middle" font-size="10">K3</text>
+<text x="300.0" y="141.85714285714286" text-anchor="middle" font-size="10">36.00</text>
+<rect x="396.6666666666667" y="216.0" width="153.33333333333334" height="44.0" fill="#4C78A8"/>
+<text x="473.33333333333337" y="275" text-anchor="middle" font-size="10">K5</text>
+<text x="473.33333333333337" y="211.0" text-anchor="middle" font-size="10">14.00</text>
+</svg>

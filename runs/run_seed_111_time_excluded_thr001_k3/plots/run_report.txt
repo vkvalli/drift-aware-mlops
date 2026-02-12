@@ -1,0 +1,12 @@
+batch_count=100
+state_count=100
+action_count=100
+cost_count=100
+model_update_count=36
+fine_tune_count=36
+fine_tune_rate=0.3600
+total_cost_usd=54.0000
+cost_per_fine_tune=1.5000
+shift_batch=50
+drift_pre_avg=0.017821
+drift_post_avg=0.016755

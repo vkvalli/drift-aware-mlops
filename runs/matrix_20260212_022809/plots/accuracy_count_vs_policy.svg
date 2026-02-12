@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">
+<rect width="640" height="360" fill="white"/>
+<text x="320.0" y="24" text-anchor="middle" font-size="16" font-family="Arial">Accuracy Count vs Policy</text>
+<text x="16" y="180.0" text-anchor="middle" font-size="12" font-family="Arial" transform="rotate(-90 16,180.0)">Accuracy Count</text>
+<line x1="50" y1="310" x2="590" y2="310" stroke="#333"/>
+<rect x="131.0" y="310.0" width="378.0" height="0.0" fill="#4e79a7"/>
+<text x="320.0" y="326" text-anchor="middle" font-size="10" font-family="Arial">linucb</text>
+<text x="320.0" y="306.0" text-anchor="middle" font-size="10" font-family="Arial">0.00</text>
+</svg>
