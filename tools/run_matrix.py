@@ -31,8 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-version", type=str, default="m_000001")
     parser.add_argument("--outdir", type=str, default="runs")
     parser.add_argument("--linucb-model", type=str, default="artifacts/policies/linucb.pkl")
-    parser.add_argument("--warm-start-n", type=int, default=10)
-    parser.add_argument("--warm-start-k", type=int, default=3)
+    parser.add_argument("--warm-start-n", type=int, default=30)
+    parser.add_argument("--warm-start-k", type=int, default=6)
+    parser.add_argument("--epsilon1", type=float, default=0.05)
+    parser.add_argument("--epsilon1-steps", type=int, default=50)
+    parser.add_argument("--epsilon2", type=float, default=0.01)
     return parser
 
 
@@ -111,6 +114,12 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
             str(args.warm_start_n),
             "--warm-start-k",
             str(args.warm_start_k),
+            "--epsilon1",
+            str(args.epsilon1),
+            "--epsilon1-steps",
+            str(args.epsilon1_steps),
+            "--epsilon2",
+            str(args.epsilon2),
             "--seed",
             str(seed),
             "--dataset-id",

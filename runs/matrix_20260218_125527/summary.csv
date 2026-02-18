@@ -1,0 +1,4 @@
+run_name,policy,threshold,consecutive_k,fixed_interval,cooldown,seed,window_size,ref_window,label_delay_batches,max_rows,batch_count,action_count,fine_tune_count,total_cost_usd,cost_per_update,action_rate,accuracy_count,accuracy_mean,accuracy_std,accuracy_min,accuracy_last
+policy=linucb_seed111,linucb,0.1,1,10,0,111,200,3,2,40000,200,200,8,12.0,1.5,0.04,7,0.5421,0.1432,0.325,0.725
+policy=linucb_seed222,linucb,0.1,1,10,0,222,200,3,2,40000,200,200,6,9.0,1.5,0.03,5,0.517,0.1668,0.325,0.505
+policy=linucb_seed333,linucb,0.1,1,10,0,333,200,3,2,40000,200,200,7,10.5,1.5,0.035,6,0.5158,0.148,0.325,0.625

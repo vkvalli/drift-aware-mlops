@@ -25,8 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fixed-interval", type=int, default=10)
     parser.add_argument("--cooldown", type=int, default=0)
     parser.add_argument("--linucb-model", type=str, default="artifacts/policies/linucb.pkl")
-    parser.add_argument("--warm-start-n", type=int, default=10)
-    parser.add_argument("--warm-start-k", type=int, default=3)
+    parser.add_argument("--warm-start-n", type=int, default=30)
+    parser.add_argument("--warm-start-k", type=int, default=6)
+    parser.add_argument("--epsilon1", type=float, default=0.05)
+    parser.add_argument("--epsilon1-steps", type=int, default=50)
+    parser.add_argument("--epsilon2", type=float, default=0.01)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--dataset-id", type=str, default="electricity")
     parser.add_argument("--model-version", type=str, default="m_000001")
@@ -140,6 +143,9 @@ def main() -> None:
         linucb_model_path=Path(args.linucb_model) if args.linucb_model else None,
         warm_start_n=args.warm_start_n,
         warm_start_k=args.warm_start_k,
+        epsilon1=args.epsilon1,
+        epsilon1_steps=args.epsilon1_steps,
+        epsilon2=args.epsilon2,
         dlq_path=dlq_path,
     )
     append_file_to_canonical(actions_output, canonical_output)

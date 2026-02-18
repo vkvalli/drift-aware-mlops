@@ -315,6 +315,10 @@ O_fair_gap is defined such that higher values indicate worse fairness (e.g., abs
 
 action_penalty discourages unnecessary retraining frequency and oscillation between actions.
 
+Default RL reward (implementation choice)
+
+For the current MVP RL training, we use a rolling performance delta (windowed Δaccuracy) as the default reward to reduce jitter and provide a denser learning signal. Raw Δaccuracy is retained as an ablation. See `docs/experiments_log.md` for the raw vs rolling comparison.
+
 Delayed Feedback Handling
 
 When labels are delayed, rewards are computed asynchronously using the label stream and appended to the decision trace using state_id and model_version. The policy-agent does not see these rewards at decision time, preventing leakage.
