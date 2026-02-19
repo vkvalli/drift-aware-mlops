@@ -1,5 +1,6 @@
 import argparse
 import json
+import random
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -36,8 +37,11 @@ def run_policy(
     fixed_interval: int = 10,
     cooldown: int = 0,
     linucb_model_path: Optional[Path] = None,
-    warm_start_n: int = 10,
-    warm_start_k: int = 3,
+    warm_start_n: int = 30,
+    warm_start_k: int = 6,
+    epsilon1: float = 0.05,
+    epsilon1_steps: int = 50,
+    epsilon2: float = 0.01,
     dlq_path: Path = Path("artifacts/dlq.jsonl"),
 ) -> int:
     states = _load_state_events(states_path, dlq_path)
@@ -47,6 +51,7 @@ def run_policy(
         start = max(1, int(seed))
 
     action_ids = IdCounter("a_", start=start)
+    rng = random.Random(seed or 0)
 
     consecutive = 0
     cooldown_remaining = 0
@@ -71,23 +76,31 @@ def run_policy(
                     action_type = "defer"
                     reason = "linucb_warm_start"
             else:
-                try:
-                    import numpy as np
+                post_warm_step = action_index - warm_start_n
+                epsilon = epsilon2
+                if epsilon1_steps > 0 and post_warm_step <= epsilon1_steps:
+                    epsilon = epsilon1
+                if rng.random() < epsilon:
+                    action_type = rng.choice(["defer", "fine_tune"])
+                    reason = "linucb_epsilon"
+                else:
+                    try:
+                        import numpy as np
 
-                    features = np.array(
-                        [
-                            float(state.get("drift_core", 0.0)),
-                            float(state.get("drift_max", 0.0)),
-                            1.0 if state.get("drift_ready", False) else 0.0,
-                            1.0 if state.get("cooldown_active", False) else 0.0,
-                        ],
-                        dtype=float,
-                    )
-                    action_type = linucb.choose_action(features)
-                    reason = "linucb_policy"
-                except Exception:
-                    action_type = "defer"
-                    reason = "linucb_unavailable"
+                        features = np.array(
+                            [
+                                float(state.get("drift_core", 0.0)),
+                                float(state.get("drift_max", 0.0)),
+                                1.0 if state.get("drift_ready", False) else 0.0,
+                                1.0 if state.get("cooldown_active", False) else 0.0,
+                            ],
+                            dtype=float,
+                        )
+                        action_type = linucb.choose_action(features)
+                        reason = "linucb_policy"
+                    except Exception:
+                        action_type = "defer"
+                        reason = "linucb_unavailable"
         elif policy == "no_retrain":
             action_type = "defer"
             reason = "no_retrain"
@@ -137,6 +150,11 @@ def run_policy(
                 "policy": policy,
                 "fixed_interval": fixed_interval,
                 "cooldown": cooldown,
+                "warm_start_n": warm_start_n,
+                "warm_start_k": warm_start_k,
+                "epsilon1": epsilon1,
+                "epsilon1_steps": epsilon1_steps,
+                "epsilon2": epsilon2,
             },
             requested_at=requested_at,
         )
@@ -157,8 +175,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fixed-interval", type=int, default=10)
     parser.add_argument("--cooldown", type=int, default=0)
     parser.add_argument("--linucb-model", type=str, default="artifacts/policies/linucb.pkl")
-    parser.add_argument("--warm-start-n", type=int, default=10)
-    parser.add_argument("--warm-start-k", type=int, default=3)
+    parser.add_argument("--warm-start-n", type=int, default=30)
+    parser.add_argument("--warm-start-k", type=int, default=6)
+    parser.add_argument("--epsilon1", type=float, default=0.05)
+    parser.add_argument("--epsilon1-steps", type=int, default=50)
+    parser.add_argument("--epsilon2", type=float, default=0.01)
     parser.add_argument("--action-start", type=int, default=1)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--dlq", default="artifacts/dlq.jsonl")
@@ -182,6 +203,9 @@ def main() -> None:
         linucb_model_path=Path(args.linucb_model) if args.linucb_model else None,
         warm_start_n=args.warm_start_n,
         warm_start_k=args.warm_start_k,
+        epsilon1=args.epsilon1,
+        epsilon1_steps=args.epsilon1_steps,
+        epsilon2=args.epsilon2,
         dlq_path=Path(args.dlq),
     )
 

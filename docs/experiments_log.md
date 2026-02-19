@@ -192,6 +192,77 @@ Policy-level means:
 Interpretation:
 - Warm-start successfully forces a few fine-tunes, so LinUCB no longer collapses to all-defer.
 - Accuracy is noisy with only 2 accuracy points per run; this is expected at this stage and mainly verifies the RL pipeline is wired end-to-end.
+- LinUCB results are not compared to baselines until `accuracy_count >= 8` per run.
+
+### LinUCB Seed Comparison (reduced exploration)
+
+Settings: `warm_start_n=30`, `warm_start_k=6`, `epsilon1=0.05`, `epsilon1_steps=50`, `epsilon2=0.01`  
+Runs: `runs/matrix_20260218_111543` (seed 111) and `runs/matrix_20260218_113759` (seeds 222, 333)
+
+| seed | fine_tune_count | total_cost_usd | accuracy_count | accuracy_mean | accuracy_std | accuracy_min | accuracy_last |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 111 | 6 | 9.0 | 5 | 0.49 | 0.1322 | 0.325 | 0.5 |
+| 222 | 5 | 7.5 | 4 | 0.52 | 0.1925 | 0.325 | 0.745 |
+| 333 | 6 | 9.0 | 5 | 0.494 | 0.1542 | 0.325 | 0.695 |
+
+Brief note: the reduced exploration schedule successfully drops fine_tune_rate to ~5–6% while still producing 4–5 accuracy points per run. This is an improvement over the earlier warm‑start settings and shows the RL pipeline can now generate evaluable signals, though `accuracy_count` is still below the baseline target (≥8).
+
+### Reward Mode Ablation (raw vs rolling, perf_window=10)
+
+Same policy/exploration, reward only:
+- raw: `reward = delta_acc - w_cost * cost_norm`
+- rolling: `delta_acc` computed from rolling accuracy window (N=10)
+
+| seed | fine_tune_rate_raw | reward_mean_raw | reward_std_raw | delta_acc_mean_raw | fine_tune_rate_roll | reward_mean_roll | reward_std_roll | delta_acc_mean_roll |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 111 | 0.0600 | -0.0078 | 0.1724 | 0.0072 | 0.0600 | 0.0091 | 0.0905 | 0.0241 |
+| 222 | 0.0500 | -0.0059 | 0.1685 | 0.0067 | 0.0500 | 0.0080 | 0.0910 | 0.0205 |
+| 333 | 0.0600 | -0.0075 | 0.1902 | 0.0076 | 0.0600 | 0.0113 | 0.0802 | 0.0263 |
+
+Interpretation: rolling reward increases the mean reward and reduces variance without changing action rate. This gives LinUCB a denser, smoother learning signal while keeping behavior comparable, making it a better default for RL training.
+
+Default choice: rolling reward (`perf_window=10`) is now the default for RL dataset generation. Raw reward is retained as an ablation option.
+
+### LinUCB Longer Run (max_rows=40000, rolling reward)
+
+Settings: `warm_start_n=30`, `warm_start_k=6`, `epsilon1=0.05`, `epsilon1_steps=50`, `epsilon2=0.01`, `reward_mode=rolling`, `perf_window=10`  
+Run folder: `runs/matrix_20260218_125039`
+
+| seed | fine_tune_count | action_rate | accuracy_count | accuracy_mean | accuracy_std | accuracy_min | accuracy_last |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 111 | 6 | 0.03 | 5 | 0.49 | 0.1322 | 0.325 | 0.5 |
+| 222 | 6 | 0.03 | 5 | 0.517 | 0.1668 | 0.325 | 0.505 |
+| 333 | 7 | 0.035 | 6 | 0.5242 | 0.1565 | 0.325 | 0.675 |
+
+Note: accuracy_count is still below the ≥8 target while action_rate remains conservative (~3–3.5%). This suggests we need a small increase in post‑warm exploration (e.g., epsilon2) or a longer run to reach comparable accuracy coverage without inflating fine_tune_rate.
+
+### LinUCB Comparison Run (target met)
+
+Settings: `max_rows=60000`, `warm_start_n=30`, `warm_start_k=6`, `epsilon1=0.05`, `epsilon1_steps=50`, `epsilon2=0.04`, `reward_mode=rolling`, `perf_window=10`  
+Run folder: `runs/matrix_20260218_130419`
+
+| seed | fine_tune_count | action_rate | accuracy_count | accuracy_mean | accuracy_std | accuracy_min | accuracy_last |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 111 | 10 | 0.0441 | 9 | 0.6028 | 0.1654 | 0.325 | 0.685 |
+| 222 | 10 | 0.0441 | 9 | 0.5939 | 0.1652 | 0.325 | 0.76 |
+| 333 | 9 | 0.0396 | 8 | 0.5944 | 0.1826 | 0.325 | 0.725 |
+
+Interpretation: This run reaches the accuracy_count ≥ 8 threshold while keeping fine_tune_rate ≤ 0.05, making it a fair RL‑to‑baseline comparison point. Use this run for the thesis comparison section.
+
+### Thesis Comparison Table (max_rows=60000)
+
+Sources:
+- Baselines: `runs/matrix_20260218_132508`
+- LinUCB: `runs/matrix_20260218_130419`
+
+| Policy | Mean Cost | Mean Accuracy | Mean Updates |
+| --- | --- | --- | --- |
+| fixed_interval (N=10) | 33.00 | 0.6289 | 22.0 |
+| threshold_persistence (K=5) | 174.00 | 0.6631 | 116.0 |
+| linucb (epsilon2=0.04) | 14.50 | 0.5970 | 9.7 |
+
+Pareto plot (Accuracy vs Cost):
+![Accuracy vs Cost Pareto](/Users/csuftitan/Desktop/Thesis/drift-aware-mlops/.worktrees/implementation/runs/pareto/accuracy_cost.svg)
 
 Run Parameters (summary.csv) — `runs/matrix_20260212_030832/summary.csv`
 

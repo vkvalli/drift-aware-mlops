@@ -25,7 +25,31 @@ def _safe_float(val: Optional[float]) -> float:
         return 0.0
 
 
-def build_dataset(events_path: Path, out_path: Path, w_cost: float) -> None:
+def _rolling_delta(acc_series: List[float], window: int, index: int) -> float:
+    if window <= 0:
+        return 0.0
+    end = index + 1
+    start = max(0, end - window)
+    cur_window = acc_series[start:end]
+    prev_end = start
+    prev_start = max(0, prev_end - window)
+    prev_window = acc_series[prev_start:prev_end]
+    if len(cur_window) < window or len(prev_window) < window:
+        return 0.0
+    cur_mean = sum(cur_window) / len(cur_window)
+    prev_mean = sum(prev_window) / len(prev_window)
+    return cur_mean - prev_mean
+
+
+def build_dataset(
+    events_path: Path,
+    out_path: Path,
+    w_cost: float,
+    reward_mode: str,
+    perf_window: int,
+    w_drift: float,
+    drift_threshold: float,
+) -> None:
     events = _load_events(events_path)
 
     states = {e["state_id"]: e for e in events if e.get("event_type") == "state"}
@@ -35,6 +59,7 @@ def build_dataset(events_path: Path, out_path: Path, w_cost: float) -> None:
 
     rows: List[Dict] = []
     prev_acc = 0.0
+    acc_series: List[float] = []
     t = 0
     for action in actions:
         state = states.get(action.get("state_id"))
@@ -45,10 +70,17 @@ def build_dataset(events_path: Path, out_path: Path, w_cost: float) -> None:
         if cost:
             accuracy_pre = cost.get("accuracy_pre")
         if accuracy_pre is None:
-            delta_acc = 0.0
+            acc_val = prev_acc
         else:
-            delta_acc = float(accuracy_pre) - prev_acc
-            prev_acc = float(accuracy_pre)
+            acc_val = float(accuracy_pre)
+
+        acc_series.append(acc_val)
+
+        if reward_mode == "rolling":
+            delta_acc = _rolling_delta(acc_series, perf_window, t)
+        else:
+            delta_acc = acc_val - prev_acc
+        prev_acc = acc_val
 
         row = {
             "t": t,
@@ -75,7 +107,12 @@ def build_dataset(events_path: Path, out_path: Path, w_cost: float) -> None:
             r["cost_norm"] = 0.0
         else:
             r["cost_norm"] = r["cost_usd"] / c_max
-        r["reward"] = r["delta_acc"] - w_cost * r["cost_norm"]
+        reward = r["delta_acc"] - w_cost * r["cost_norm"]
+        if r.get("action_type") == "defer" and w_drift > 0.0:
+            drift_val = float(r.get("drift_core", 0.0))
+            if drift_val >= drift_threshold:
+                reward -= w_drift * drift_val
+        r["reward"] = reward
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     header = [
@@ -136,13 +173,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--events", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--w-cost", type=float, default=0.25)
+    parser.add_argument("--reward-mode", choices=["raw", "rolling"], default="rolling")
+    parser.add_argument("--perf-window", type=int, default=10)
+    parser.add_argument("--w-drift", type=float, default=0.0)
+    parser.add_argument("--drift-threshold", type=float, default=0.0)
     return parser
 
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    build_dataset(Path(args.events), Path(args.out), args.w_cost)
+    build_dataset(
+        Path(args.events),
+        Path(args.out),
+        args.w_cost,
+        args.reward_mode,
+        args.perf_window,
+        args.w_drift,
+        args.drift_threshold,
+    )
 
 
 if __name__ == "__main__":
