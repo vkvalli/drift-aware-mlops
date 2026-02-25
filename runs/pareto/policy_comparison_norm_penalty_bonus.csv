@@ -1,0 +1,4 @@
+policy,mean_cost_usd,mean_accuracy,mean_updates
+fixed_interval (N=10),33.00,0.6289,22.0
+threshold_persistence (K=5),174.00,0.6631,116.0
+linucb (norm+penalty+bonus),14.50,0.5970,9.7

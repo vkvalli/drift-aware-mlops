@@ -223,6 +223,27 @@ Interpretation: rolling reward increases the mean reward and reduces variance wi
 
 Default choice: rolling reward (`perf_window=10`) is now the default for RL dataset generation. Raw reward is retained as an ablation option.
 
+### Control vs Reward-Shaping Ablation (same run, seed111)
+
+Run: `runs/matrix_20260218_130419/policy=linucb_seed111/events.jsonl`  
+Comparison setup:
+- control: rolling reward only (`reward_mode=rolling`, `perf_window=10`, `w_cost=0.25`)
+- ablation: rolling + normalization + penalty/bonus (`normalize_perf`, `action_penalty=0.03`, `defer_bonus=0.01`, `defer_threshold=0.2`)
+
+| metric | control | ablation |
+| --- | --- | --- |
+| n_rows | 227 | 227 |
+| fine_tune_rate | 0.0441 | 0.0441 |
+| accuracy_pre_mean | 0.6067 | 0.6067 |
+| accuracy_pre_std | 0.1143 | 0.1143 |
+| delta_acc_mean | 0.0077 | 0.0090 |
+| delta_acc_std | 0.0757 | 0.0880 |
+| reward_mean | -0.0033 | 0.0062 |
+| reward_std | 0.0856 | 0.0995 |
+| C_max | 1.5000 | 1.5000 |
+
+Interpretation: reward shaping improves mean reward (negative to positive) and slightly improves mean delta accuracy at the same action rate, with a modest increase in variance.
+
 ### LinUCB Longer Run (max_rows=40000, rolling reward)
 
 Settings: `warm_start_n=30`, `warm_start_k=6`, `epsilon1=0.05`, `epsilon1_steps=50`, `epsilon2=0.01`, `reward_mode=rolling`, `perf_window=10`  
@@ -263,6 +284,51 @@ Sources:
 
 Pareto plot (Accuracy vs Cost):
 ![Accuracy vs Cost Pareto](/Users/csuftitan/Desktop/Thesis/drift-aware-mlops/.worktrees/implementation/runs/pareto/accuracy_cost.svg)
+
+### Updated Policy Comparison (LinUCB norm+penalty+bonus)
+
+Sources:
+- Baselines: `runs/matrix_20260218_132508/summary.csv`
+- LinUCB robustness run: `runs/matrix_20260224_213637/summary.csv`
+- Aggregated table: `runs/pareto/policy_comparison_norm_penalty_bonus.csv`
+
+| Policy | Mean Cost | Mean Accuracy | Mean Updates |
+| --- | --- | --- | --- |
+| fixed_interval (N=10) | 33.00 | 0.6289 | 22.0 |
+| threshold_persistence (K=5) | 174.00 | 0.6631 | 116.0 |
+| linucb (norm+penalty+bonus) | 14.50 | 0.5970 | 9.7 |
+
+Diagnostics (seed111, reward shaping enabled):
+- fixed_interval reward: `runs/pareto/diagnostics/fixed_interval_seed111/reward_over_time.svg`
+- fixed_interval action probability: `runs/pareto/diagnostics/fixed_interval_seed111/action_prob_fine_tune_over_time.svg`
+- threshold_persistence reward: `runs/pareto/diagnostics/threshold_k5_seed111/reward_over_time.svg`
+- threshold_persistence action probability: `runs/pareto/diagnostics/threshold_k5_seed111/action_prob_fine_tune_over_time.svg`
+- linucb reward: `runs/pareto/diagnostics/linucb_seed111/reward_over_time.svg`
+- linucb action probability: `runs/pareto/diagnostics/linucb_seed111/action_prob_fine_tune_over_time.svg`
+
+### RL Reward-Shaping Robustness Check (3 seeds)
+
+Run folder: `runs/matrix_20260224_213637`  
+Reward config:
+- `reward_mode=rolling`
+- `perf_window=10`
+- `normalize_perf=true`
+- `action_penalty=0.03`
+- `defer_bonus=0.01`
+- `defer_threshold=0.2`
+- `w_cost=0.25`
+
+| seed | fine_tune_rate | delta_acc_mean | reward_mean | status |
+| --- | --- | --- | --- | --- |
+| 111 | 0.0441 | 0.0090 | 0.0062 | pass |
+| 222 | 0.0441 | 0.0106 | 0.0078 | pass |
+| 333 | 0.0396 | 0.0158 | 0.0143 | pass |
+
+Pass/fail criteria applied:
+- PASS if `reward_mean > 0` and `delta_acc_mean > 0` in at least 2/3 seeds, and `fine_tune_rate <= 0.10`.
+- FAIL if any seed has `reward_mean <= 0` or action rate explodes (`> 0.12`).
+
+Outcome: **PASS** (3/3 seeds satisfy the positive reward and positive delta-accuracy criteria, with conservative action rates).
 
 Run Parameters (summary.csv) — `runs/matrix_20260212_030832/summary.csv`
 

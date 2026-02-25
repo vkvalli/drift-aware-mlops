@@ -49,6 +49,10 @@ def build_dataset(
     perf_window: int,
     w_drift: float,
     drift_threshold: float,
+    normalize_perf: bool,
+    action_penalty: float,
+    defer_bonus: float,
+    defer_threshold: float,
 ) -> None:
     events = _load_events(events_path)
 
@@ -60,6 +64,7 @@ def build_dataset(
     rows: List[Dict] = []
     prev_acc = 0.0
     acc_series: List[float] = []
+    raw_acc_series: List[float] = []
     t = 0
     for action in actions:
         state = states.get(action.get("state_id"))
@@ -74,6 +79,7 @@ def build_dataset(
         else:
             acc_val = float(accuracy_pre)
 
+        raw_acc_series.append(acc_val)
         acc_series.append(acc_val)
 
         if reward_mode == "rolling":
@@ -101,6 +107,19 @@ def build_dataset(
         rows.append(row)
         t += 1
 
+    if normalize_perf:
+        perf_max = max(raw_acc_series) if raw_acc_series else 0.0
+        if perf_max > 0:
+            acc_series = [val / perf_max for val in acc_series]
+            prev_acc = 0.0
+            for idx, r in enumerate(rows):
+                if reward_mode == "rolling":
+                    delta_acc = _rolling_delta(acc_series, perf_window, idx)
+                else:
+                    delta_acc = acc_series[idx] - prev_acc
+                prev_acc = acc_series[idx]
+                r["delta_acc"] = delta_acc
+
     c_max = max((r["cost_usd"] for r in rows), default=0.0)
     for r in rows:
         if c_max == 0:
@@ -112,6 +131,12 @@ def build_dataset(
             drift_val = float(r.get("drift_core", 0.0))
             if drift_val >= drift_threshold:
                 reward -= w_drift * drift_val
+        if r.get("action_type") == "fine_tune" and action_penalty > 0.0:
+            reward -= action_penalty
+        if r.get("action_type") == "defer" and defer_bonus > 0.0:
+            drift_val = float(r.get("drift_core", 0.0))
+            if drift_val < defer_threshold:
+                reward += defer_bonus
         r["reward"] = reward
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,6 +202,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--perf-window", type=int, default=10)
     parser.add_argument("--w-drift", type=float, default=0.0)
     parser.add_argument("--drift-threshold", type=float, default=0.0)
+    parser.add_argument("--normalize-perf", action="store_true")
+    parser.add_argument("--action-penalty", type=float, default=0.0)
+    parser.add_argument("--defer-bonus", type=float, default=0.0)
+    parser.add_argument("--defer-threshold", type=float, default=0.0)
     return parser
 
 
@@ -191,6 +220,10 @@ def main() -> None:
         args.perf_window,
         args.w_drift,
         args.drift_threshold,
+        args.normalize_perf,
+        args.action_penalty,
+        args.defer_bonus,
+        args.defer_threshold,
     )
 
 
