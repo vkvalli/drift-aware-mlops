@@ -36,6 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epsilon1", type=float, default=0.05)
     parser.add_argument("--epsilon1-steps", type=int, default=50)
     parser.add_argument("--epsilon2", type=float, default=0.01)
+    parser.add_argument("--enable-shadow-buffer", action="store_true")
+    parser.add_argument("--shadow-batches", type=int, default=2)
     return parser
 
 
@@ -120,6 +122,8 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
             str(args.epsilon1_steps),
             "--epsilon2",
             str(args.epsilon2),
+            "--shadow-batches",
+            str(args.shadow_batches),
             "--seed",
             str(seed),
             "--dataset-id",
@@ -142,6 +146,8 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
             str(run_dir / "dlq.jsonl"),
             "--clean-artifacts",
         ]
+        if args.enable_shadow_buffer:
+            sys.argv.append("--enable-shadow-buffer")
         if args.max_rows is None:
             sys.argv.remove("")
         offline_main()

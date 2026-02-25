@@ -80,6 +80,42 @@ def _batch_slice(batch_id: str, window_size: int) -> slice:
     return slice(start, end)
 
 
+def _batch_slice_from_id(batch_id: str, window_size: int) -> slice:
+    return _batch_slice(batch_id, window_size)
+
+
+def _filter_shadow_rows_from_slice(
+    x_rows: List[List[float]],
+    y_rows: List[int],
+    start_idx: int,
+    window_size: int,
+    shadow_batch_ids: set[str],
+) -> Tuple[List[List[float]], List[int]]:
+    if not shadow_batch_ids:
+        return x_rows, y_rows
+    kept_x: List[List[float]] = []
+    kept_y: List[int] = []
+    for offset, (xv, yv) in enumerate(zip(x_rows, y_rows)):
+        global_idx = start_idx + offset
+        batch_num = (global_idx // window_size) + 1
+        batch_id = f"b_{batch_num:06d}"
+        if batch_id in shadow_batch_ids:
+            continue
+        kept_x.append(xv)
+        kept_y.append(yv)
+    return kept_x, kept_y
+
+
+def _predict_accuracy(model, X: List[List[float]], y: List[int]) -> Optional[float]:
+    if model is None or not X or not y:
+        return None
+    if not hasattr(model, "classes_"):
+        return None
+    preds = model.predict(X)
+    correct = sum(int(p == yy) for p, yy in zip(preds, y))
+    return correct / max(len(y), 1)
+
+
 def _load_model(path: Path):
     if not path.exists():
         return None
@@ -125,6 +161,7 @@ def run_trainer(
     states_path: Optional[Path] = None,
     csv_path: Optional[Path] = None,
     window_size: int = 10,
+    shadow_batch_ids: Optional[List[str]] = None,
 ) -> int:
     actions = _load_actions(actions_path, dlq_path)
     processed = _load_processed(processed_index_path)
@@ -133,6 +170,14 @@ def run_trainer(
     rows_y: List[int] = []
     if csv_path:
         rows_x, rows_y = _load_csv_rows(csv_path)
+    shadow_batch_ids_set = set(shadow_batch_ids or [])
+    shadow_x: List[List[float]] = []
+    shadow_y: List[int] = []
+    if rows_x and shadow_batch_ids_set:
+        for shadow_batch_id in sorted(shadow_batch_ids_set):
+            sl = _batch_slice_from_id(shadow_batch_id, window_size)
+            shadow_x.extend(rows_x[sl])
+            shadow_y.extend(rows_y[sl])
 
     start = 1 if seed is None else max(1, int(seed))
     cost_ids = IdCounter("c_", start=start)
@@ -155,34 +200,55 @@ def run_trainer(
         reason_code = "ok" if executed else "defer"
         state = states.get(action.get("state_id", ""))
         label_available = bool(state.get("label_available", True)) if state else True
+        batch_id = state.get("batch_id") if state else None
         if executed and not label_available:
             executed = False
             reason_code = "insufficient_data"
+        if executed and batch_id in shadow_batch_ids_set:
+            # Held-out shadow batches are evaluation-only and never used for training.
+            executed = False
+            reason_code = "shadow_batch"
 
         accuracy_pre = None
+        shadow_accuracy_pre = None
+        shadow_accuracy_post = None
+        delta_shadow = 0.0
         X_batch: List[List[float]] = []
         y_batch: List[int] = []
         model = None
+        pending_update: Optional[ModelUpdateEvent] = None
 
         if csv_path and rows_x and label_available:
-            batch_id = state.get("batch_id") if state else None
             if batch_id:
                 sl = _batch_slice(batch_id, window_size)
                 X_batch = rows_x[sl]
                 y_batch = rows_y[sl]
+                X_batch, y_batch = _filter_shadow_rows_from_slice(
+                    X_batch,
+                    y_batch,
+                    sl.start or 0,
+                    window_size,
+                    shadow_batch_ids_set,
+                )
             else:
                 X_batch = rows_x
                 y_batch = rows_y
+                X_batch, y_batch = _filter_shadow_rows_from_slice(
+                    X_batch,
+                    y_batch,
+                    0,
+                    window_size,
+                    shadow_batch_ids_set,
+                )
 
             model_path = Path(f"artifacts/models/{current_model_version or 'm_000000'}.pkl")
             model = _load_model(model_path)
             if model is None:
                 model = create_model(seed)
 
-            if model is not None and hasattr(model, "classes_") and X_batch:
-                preds = model.predict(X_batch)
-                correct = sum(int(p == y) for p, y in zip(preds, y_batch))
-                accuracy_pre = correct / max(len(y_batch), 1)
+            accuracy_pre = _predict_accuracy(model, X_batch, y_batch)
+            if executed and shadow_x and shadow_y:
+                shadow_accuracy_pre = _predict_accuracy(model, shadow_x, shadow_y)
 
         if executed:
             cost = CostEvent(
@@ -196,6 +262,9 @@ def run_trainer(
                 executed=True,
                 reason_code=reason_code,
                 accuracy_pre=accuracy_pre,
+                shadow_accuracy_pre=shadow_accuracy_pre,
+                shadow_accuracy_post=shadow_accuracy_post,
+                delta_shadow=delta_shadow,
             )
         else:
             cost = CostEvent(
@@ -209,11 +278,10 @@ def run_trainer(
                 executed=False,
                 reason_code=reason_code,
                 accuracy_pre=accuracy_pre,
+                shadow_accuracy_pre=shadow_accuracy_pre,
+                shadow_accuracy_post=shadow_accuracy_post,
+                delta_shadow=delta_shadow,
             )
-
-        validated_cost = validate_or_dlq(cost.dict(), CostEvent, dlq_path)
-        if validated_cost:
-            write_event(validated_cost, events_path, event_type="cost")
 
         if executed:
             new_model_version = model_ids.next()
@@ -235,11 +303,16 @@ def run_trainer(
                     else:
                         model.partial_fit(X_batch, y_batch)
 
+                    if shadow_x and shadow_y:
+                        shadow_accuracy_post = _predict_accuracy(model, shadow_x, shadow_y)
+                        if shadow_accuracy_pre is not None and shadow_accuracy_post is not None:
+                            delta_shadow = float(shadow_accuracy_post - shadow_accuracy_pre)
+
                     _save_model(Path(artifact_path), model)
             else:
                 eval_summary = {"sklearn_available": False}
 
-            update = ModelUpdateEvent(
+            pending_update = ModelUpdateEvent(
                 update_id=update_ids.next(),
                 action_id=action_id,
                 timestamp=float(action.get("timestamp", time.time())),
@@ -248,10 +321,33 @@ def run_trainer(
                 eval_summary=eval_summary,
                 executed=True,
             )
-            validated_update = validate_or_dlq(update.dict(), ModelUpdateEvent, dlq_path)
+            current_model_version = new_model_version
+
+        if executed:
+            cost = CostEvent(
+                cost_id=cost.cost_id,
+                action_id=cost.action_id,
+                timestamp=cost.timestamp,
+                train_time_s=cost.train_time_s,
+                estimated_usd=cost.estimated_usd,
+                energy_kwh=cost.energy_kwh,
+                co2_kg=cost.co2_kg,
+                executed=cost.executed,
+                reason_code=cost.reason_code,
+                accuracy_pre=cost.accuracy_pre,
+                shadow_accuracy_pre=shadow_accuracy_pre,
+                shadow_accuracy_post=shadow_accuracy_post,
+                delta_shadow=delta_shadow,
+            )
+
+        validated_cost = validate_or_dlq(cost.dict(), CostEvent, dlq_path)
+        if validated_cost:
+            write_event(validated_cost, events_path, event_type="cost")
+
+        if pending_update is not None:
+            validated_update = validate_or_dlq(pending_update.dict(), ModelUpdateEvent, dlq_path)
             if validated_update:
                 write_event(validated_update, events_path, event_type="model_update")
-            current_model_version = new_model_version
 
         _append_processed(processed_index_path, action_id, reason_code)
         processed.add(action_id)
@@ -269,6 +365,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--states-file", default=None)
     parser.add_argument("--csv", default=None)
     parser.add_argument("--window-size", type=int, default=10)
+    parser.add_argument("--shadow-batch-ids", default="")
     parser.add_argument("--dlq", default="artifacts/dlq.jsonl")
     return parser
 
@@ -286,6 +383,7 @@ def main() -> None:
         states_path=Path(args.states_file) if args.states_file else None,
         csv_path=Path(args.csv) if args.csv else None,
         window_size=args.window_size,
+        shadow_batch_ids=[x for x in args.shadow_batch_ids.split(",") if x],
     )
 
 
