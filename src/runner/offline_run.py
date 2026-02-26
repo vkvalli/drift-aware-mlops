@@ -42,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flush-pending-labels", type=str, default="true")
     parser.add_argument("--ref-window", type=int, default=3)
     parser.add_argument("--threshold", type=float, default=1.0)
+    parser.add_argument("--threshold-full", type=float, default=None)
     parser.add_argument("--consecutive-k", type=int, default=3)
     parser.add_argument("--policy", type=str, default="threshold_persistence")
     parser.add_argument("--fixed-interval", type=int, default=10)
@@ -64,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dlq", type=str, default="artifacts/dlq.jsonl")
     parser.add_argument("--enable-shadow-buffer", action="store_true")
     parser.add_argument("--shadow-batches", type=int, default=2)
+    parser.add_argument("--retrain-window-batches", type=int, default=5)
     parser.add_argument("--clean-artifacts", action="store_true")
     return parser
 
@@ -139,6 +141,7 @@ def main() -> None:
         "label_delay_batches": args.label_delay_batches,
         "ref_window": args.ref_window,
         "threshold": args.threshold,
+        "threshold_full": args.threshold_full,
         "policy": args.policy,
         "consecutive_k": args.consecutive_k,
         "fixed_interval": args.fixed_interval,
@@ -167,6 +170,7 @@ def main() -> None:
         states_path=state_output,
         actions_path=actions_output,
         threshold=args.threshold,
+        threshold_full=args.threshold_full,
         action_start=1,
         seed=args.seed,
         consecutive_k=args.consecutive_k,
@@ -193,6 +197,7 @@ def main() -> None:
         csv_path=csv_path,
         window_size=args.window_size,
         shadow_batch_ids=shadow_batch_ids,
+        retrain_window_batches=args.retrain_window_batches,
     )
     append_file_to_canonical(trainer_output, canonical_output)
 

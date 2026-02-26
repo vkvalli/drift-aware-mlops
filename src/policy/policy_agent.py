@@ -30,6 +30,7 @@ def run_policy(
     states_path: Path,
     actions_path: Path,
     threshold: float = 1.0,
+    threshold_full: Optional[float] = None,
     action_start: int = 1,
     seed: Optional[int] = None,
     consecutive_k: int = 3,
@@ -120,7 +121,15 @@ def run_policy(
             else:
                 consecutive = 0
 
-            if drift_ready and consecutive >= consecutive_k:
+            if (
+                drift_ready
+                and threshold_full is not None
+                and drift_core >= threshold_full
+                and consecutive >= consecutive_k
+            ):
+                action_type = "full_retrain"
+                reason = "drift_full_threshold"
+            elif drift_ready and consecutive >= consecutive_k:
                 action_type = "fine_tune"
                 reason = "drift_threshold"
             else:
@@ -146,6 +155,7 @@ def run_policy(
             reason=reason,
             action_params={
                 "threshold": threshold,
+                "threshold_full": threshold_full,
                 "consecutive_k": consecutive_k,
                 "policy": policy,
                 "fixed_interval": fixed_interval,
@@ -170,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--states", default="artifacts/states.jsonl")
     parser.add_argument("--actions", default="artifacts/actions.jsonl")
     parser.add_argument("--threshold", type=float, default=1.0)
+    parser.add_argument("--threshold-full", type=float, default=None)
     parser.add_argument("--consecutive-k", type=int, default=3)
     parser.add_argument("--policy", type=str, default="threshold_persistence")
     parser.add_argument("--fixed-interval", type=int, default=10)
@@ -194,6 +205,7 @@ def main() -> None:
         states_path=Path(args.states),
         actions_path=Path(args.actions),
         threshold=args.threshold,
+        threshold_full=args.threshold_full,
         action_start=args.action_start,
         seed=args.seed,
         consecutive_k=args.consecutive_k,

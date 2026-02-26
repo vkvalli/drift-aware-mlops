@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ref-window", type=int, default=3)
     parser.add_argument("--seeds", type=str, default="1,2,3")
     parser.add_argument("--thresholds", type=str, default="0.1")
+    parser.add_argument("--threshold-full", type=float, default=None)
     parser.add_argument("--ks", type=str, default="1,3,5")
     parser.add_argument("--fixed-intervals", type=str, default="10")
     parser.add_argument("--cooldowns", type=str, default="0")
@@ -38,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epsilon2", type=float, default=0.01)
     parser.add_argument("--enable-shadow-buffer", action="store_true")
     parser.add_argument("--shadow-batches", type=int, default=2)
+    parser.add_argument("--retrain-window-batches", type=int, default=5)
     return parser
 
 
@@ -88,14 +90,12 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
 
     old_argv = sys.argv
     try:
-        sys.argv = [
+        argv = [
             "offline_run.py",
             "--csv",
             args.csv,
             "--window-size",
             str(args.window_size),
-            "--max-rows",
-            str(args.max_rows) if args.max_rows is not None else "",
             "--label-delay-batches",
             str(args.label_delay_batches),
             "--ref-window",
@@ -124,6 +124,8 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
             str(args.epsilon2),
             "--shadow-batches",
             str(args.shadow_batches),
+            "--retrain-window-batches",
+            str(args.retrain_window_batches),
             "--seed",
             str(seed),
             "--dataset-id",
@@ -146,10 +148,13 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
             str(run_dir / "dlq.jsonl"),
             "--clean-artifacts",
         ]
+        if args.max_rows is not None:
+            argv.extend(["--max-rows", str(args.max_rows)])
+        if args.threshold_full is not None:
+            argv.extend(["--threshold-full", str(args.threshold_full)])
         if args.enable_shadow_buffer:
-            sys.argv.append("--enable-shadow-buffer")
-        if args.max_rows is None:
-            sys.argv.remove("")
+            argv.append("--enable-shadow-buffer")
+        sys.argv = argv
         offline_main()
     finally:
         sys.argv = old_argv

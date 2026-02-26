@@ -31,6 +31,17 @@ class TestTrainer(unittest.TestCase):
                 "action_params": {"threshold": 1.0, "consecutive_k": 2},
                 "requested_at": 2.0,
             },
+            {
+                "event_type": "action",
+                "action_id": "a_000003",
+                "state_id": "s_000003",
+                "action_type": "full_retrain",
+                "model_version": "m_000001",
+                "timestamp": 3.0,
+                "reason": "drift_full_threshold",
+                "action_params": {"threshold": 1.0, "threshold_full": 2.0, "consecutive_k": 2},
+                "requested_at": 3.0,
+            },
         ]
         path.write_text("\n".join(json.dumps(a) for a in actions))
 
@@ -54,15 +65,18 @@ class TestTrainer(unittest.TestCase):
             cost_records = [r for r in records if r["event_type"] == "cost"]
             update_records = [r for r in records if r["event_type"] == "model_update"]
 
-            self.assertEqual(len(cost_records), 2)
-            self.assertEqual(len(update_records), 1)
+            self.assertEqual(len(cost_records), 3)
+            self.assertEqual(len(update_records), 2)
 
             defer = cost_records[0]
             fine_tune = cost_records[1]
+            full_retrain = cost_records[2]
             self.assertFalse(defer["executed"])
             self.assertEqual(defer["reason_code"], "defer")
             self.assertTrue(fine_tune["executed"])
             self.assertEqual(fine_tune["reason_code"], "ok")
+            self.assertTrue(full_retrain["executed"])
+            self.assertGreater(full_retrain["estimated_usd"], fine_tune["estimated_usd"])
 
     def test_idempotency(self):
         with TemporaryDirectory() as tmpdir:
@@ -88,8 +102,8 @@ class TestTrainer(unittest.TestCase):
             cost_records = [r for r in records if r["event_type"] == "cost"]
             update_records = [r for r in records if r["event_type"] == "model_update"]
 
-            self.assertEqual(len(cost_records), 1)
-            self.assertEqual(len(update_records), 0)
+            self.assertEqual(len(cost_records), 2)
+            self.assertEqual(len(update_records), 1)
             self.assertEqual(cost_records[0]["action_id"], "a_000001")
 
     def test_determinism(self):

@@ -162,6 +162,7 @@ def run_trainer(
     csv_path: Optional[Path] = None,
     window_size: int = 10,
     shadow_batch_ids: Optional[List[str]] = None,
+    retrain_window_batches: int = 5,
 ) -> int:
     actions = _load_actions(actions_path, dlq_path)
     processed = _load_processed(processed_index_path)
@@ -196,7 +197,7 @@ def run_trainer(
             continue
 
         action_type = action.get("action_type", "defer")
-        executed = action_type == "fine_tune"
+        executed = action_type in {"fine_tune", "full_retrain"}
         reason_code = "ok" if executed else "defer"
         state = states.get(action.get("state_id", ""))
         label_available = bool(state.get("label_available", True)) if state else True
@@ -220,13 +221,23 @@ def run_trainer(
 
         if csv_path and rows_x and label_available:
             if batch_id:
-                sl = _batch_slice(batch_id, window_size)
-                X_batch = rows_x[sl]
-                y_batch = rows_y[sl]
+                if action_type == "full_retrain":
+                    cur_sl = _batch_slice(batch_id, window_size)
+                    end_row = cur_sl.stop or len(rows_x)
+                    retrain_batches = max(1, int(retrain_window_batches))
+                    start_row = max(0, end_row - (retrain_batches * window_size))
+                    X_batch = rows_x[start_row:end_row]
+                    y_batch = rows_y[start_row:end_row]
+                    slice_start = start_row
+                else:
+                    sl = _batch_slice(batch_id, window_size)
+                    X_batch = rows_x[sl]
+                    y_batch = rows_y[sl]
+                    slice_start = sl.start or 0
                 X_batch, y_batch = _filter_shadow_rows_from_slice(
                     X_batch,
                     y_batch,
-                    sl.start or 0,
+                    slice_start,
                     window_size,
                     shadow_batch_ids_set,
                 )
@@ -251,14 +262,24 @@ def run_trainer(
                 shadow_accuracy_pre = _predict_accuracy(model, shadow_x, shadow_y)
 
         if executed:
+            if action_type == "full_retrain":
+                train_time_s = 10.0
+                estimated_usd = 4.5
+                energy_kwh = 0.06
+                co2_kg = 0.0015
+            else:
+                train_time_s = 3.0
+                estimated_usd = 1.50
+                energy_kwh = 0.02
+                co2_kg = 0.0005
             cost = CostEvent(
                 cost_id=cost_ids.next(),
                 action_id=action_id,
                 timestamp=float(action.get("timestamp", time.time())),
-                train_time_s=3.0,
-                estimated_usd=1.50,
-                energy_kwh=0.02,
-                co2_kg=0.0005,
+                train_time_s=train_time_s,
+                estimated_usd=estimated_usd,
+                energy_kwh=energy_kwh,
+                co2_kg=co2_kg,
                 executed=True,
                 reason_code=reason_code,
                 accuracy_pre=accuracy_pre,
@@ -298,17 +319,23 @@ def run_trainer(
                     else:
                         eval_summary = {"n_samples": len(y_batch)}
 
-                    if not hasattr(model, "classes_"):
-                        model.partial_fit(X_batch, y_batch, classes=[0, 1])
-                    else:
-                        model.partial_fit(X_batch, y_batch)
+                    train_model = model
+                    if action_type == "full_retrain":
+                        train_model = create_model(seed)
 
-                    if shadow_x and shadow_y:
-                        shadow_accuracy_post = _predict_accuracy(model, shadow_x, shadow_y)
+                    if train_model is not None:
+                        if not hasattr(train_model, "classes_"):
+                            train_model.partial_fit(X_batch, y_batch, classes=[0, 1])
+                        else:
+                            train_model.partial_fit(X_batch, y_batch)
+
+                    if shadow_x and shadow_y and train_model is not None:
+                        shadow_accuracy_post = _predict_accuracy(train_model, shadow_x, shadow_y)
                         if shadow_accuracy_pre is not None and shadow_accuracy_post is not None:
                             delta_shadow = float(shadow_accuracy_post - shadow_accuracy_pre)
 
-                    _save_model(Path(artifact_path), model)
+                    if train_model is not None:
+                        _save_model(Path(artifact_path), train_model)
             else:
                 eval_summary = {"sklearn_available": False}
 
@@ -366,6 +393,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--csv", default=None)
     parser.add_argument("--window-size", type=int, default=10)
     parser.add_argument("--shadow-batch-ids", default="")
+    parser.add_argument("--retrain-window-batches", type=int, default=5)
     parser.add_argument("--dlq", default="artifacts/dlq.jsonl")
     return parser
 
@@ -384,6 +412,7 @@ def main() -> None:
         csv_path=Path(args.csv) if args.csv else None,
         window_size=args.window_size,
         shadow_batch_ids=[x for x in args.shadow_batch_ids.split(",") if x],
+        retrain_window_batches=args.retrain_window_batches,
     )
 
 
