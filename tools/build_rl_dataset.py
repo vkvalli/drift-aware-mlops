@@ -82,7 +82,11 @@ def build_dataset(
         raw_acc_series.append(acc_val)
         acc_series.append(acc_val)
 
-        if reward_mode == "rolling":
+        if reward_mode == "shadow":
+            delta_acc = 0.0
+            if cost and cost.get("delta_shadow") is not None:
+                delta_acc = float(cost.get("delta_shadow"))
+        elif reward_mode == "rolling":
             delta_acc = _rolling_delta(acc_series, perf_window, t)
         else:
             delta_acc = acc_val - prev_acc
@@ -198,7 +202,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--events", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--w-cost", type=float, default=0.25)
-    parser.add_argument("--reward-mode", choices=["raw", "rolling"], default="rolling")
+    parser.add_argument("--reward-mode", choices=["raw", "rolling", "shadow"], default="rolling")
     parser.add_argument("--perf-window", type=int, default=10)
     parser.add_argument("--w-drift", type=float, default=0.0)
     parser.add_argument("--drift-threshold", type=float, default=0.0)

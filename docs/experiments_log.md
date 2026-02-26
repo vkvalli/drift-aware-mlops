@@ -330,6 +330,27 @@ Pass/fail criteria applied:
 
 Outcome: **PASS** (3/3 seeds satisfy the positive reward and positive delta-accuracy criteria, with conservative action rates).
 
+### Shadow vs Rolling Reward Ablation (3 seeds)
+
+Conditions (same policy/exploration settings):
+- A: rolling reward (`reward_mode=rolling`)
+- B: shadow reward (`reward_mode=shadow`, `--enable-shadow-buffer`, deterministic `shadow_batch_ids`)
+
+Run folders:
+- rolling: `runs/matrix_20260224_224447`
+- shadow: `runs/matrix_20260224_224517`
+
+| Condition | Seed | fine_tune_rate | reward_mean | reward_std | delta metric mean | accuracy_count |
+| --- | --- | --- | --- | --- | --- | --- |
+| rolling | 111 | 0.0441 | 0.0062 | 0.0995 | 0.0090 (`delta_acc`) | 9 |
+| shadow | 111 | 0.0441 | 0.0006 | 0.1880 | 0.0034 (`delta_shadow`) | 9 |
+| rolling | 222 | 0.0441 | 0.0078 | 0.1196 | 0.0106 (`delta_acc`) | 9 |
+| shadow | 222 | 0.0441 | 0.0018 | 0.1754 | 0.0034 (`delta_shadow`) | 8 |
+| rolling | 333 | 0.0396 | 0.0143 | 0.0840 | 0.0158 (`delta_acc`) | 8 |
+| shadow | 333 | 0.0396 | 0.0027 | 0.1784 | 0.0042 (`delta_shadow`) | 8 |
+
+Interpretation: we evaluated a stricter shadow-validation reward that credits only update-induced improvements on a held-out buffer. While this variant is more causally isolated, it produced lower signal strength and higher variance than the rolling performance reward. Since both approaches showed consistent policy behavior, we retain rolling reward as the primary training signal and keep shadow evaluation as an ablation for robustness.
+
 Run Parameters (summary.csv) — `runs/matrix_20260212_030832/summary.csv`
 
 | run_name | policy | threshold | consecutive_k | fixed_interval | cooldown | seed | window_size | ref_window | label_delay_batches | max_rows | batch_count | action_count | fine_tune_count | total_cost_usd | cost_per_update | action_rate | accuracy_count | accuracy_mean | accuracy_std | accuracy_min | accuracy_last |

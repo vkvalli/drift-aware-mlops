@@ -1,14 +1,36 @@
 import argparse
 import json
+import random
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import List
 
 from src.ingestion.replay import run_replay
 from src.monitor.monitor import run_monitor
 from src.policy.policy_agent import run_policy
 from src.runner.merge_utils import append_file_to_canonical
 from src.trainer.trainer import run_trainer
+
+
+def _batch_id_from_zero_index(idx: int) -> str:
+    return f"b_{idx + 1:06d}"
+
+
+def _select_shadow_batch_ids(num_batches: int, seed: int, shadow_batches: int) -> List[str]:
+    if shadow_batches <= 0 or num_batches <= 1:
+        return []
+    early_end = min(num_batches - 1, max(6, int(0.2 * num_batches)))
+    if early_end >= 2:
+        candidates = list(range(2, early_end + 1))
+    else:
+        candidates = list(range(1, num_batches))
+    if not candidates:
+        return []
+    k = min(shadow_batches, len(candidates))
+    rng = random.Random(seed)
+    picked = sorted(rng.sample(candidates, k=k))
+    return [_batch_id_from_zero_index(i) for i in picked]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flush-pending-labels", type=str, default="true")
     parser.add_argument("--ref-window", type=int, default=3)
     parser.add_argument("--threshold", type=float, default=1.0)
+    parser.add_argument("--threshold-full", type=float, default=None)
     parser.add_argument("--consecutive-k", type=int, default=3)
     parser.add_argument("--policy", type=str, default="threshold_persistence")
     parser.add_argument("--fixed-interval", type=int, default=10)
@@ -40,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--canonical-output", type=str, default="artifacts/events.jsonl")
     parser.add_argument("--processed-index-file", type=str, default="artifacts/processed_actions.jsonl")
     parser.add_argument("--dlq", type=str, default="artifacts/dlq.jsonl")
+    parser.add_argument("--enable-shadow-buffer", action="store_true")
+    parser.add_argument("--shadow-batches", type=int, default=2)
+    parser.add_argument("--retrain-window-batches", type=int, default=5)
     parser.add_argument("--clean-artifacts", action="store_true")
     return parser
 
@@ -88,26 +114,7 @@ def main() -> None:
     except Exception:
         git_commit = "unknown"
 
-    run_meta = {
-        "event_type": "run_meta",
-        "dataset_id": args.dataset_id,
-        "window_size": args.window_size,
-        "max_rows": args.max_rows,
-        "label_delay_batches": args.label_delay_batches,
-        "ref_window": args.ref_window,
-        "threshold": args.threshold,
-        "policy": args.policy,
-        "consecutive_k": args.consecutive_k,
-        "fixed_interval": args.fixed_interval,
-        "cooldown": args.cooldown,
-        "seed": args.seed,
-        "git_commit": git_commit,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    with canonical_output.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(run_meta) + "\n")
-
-    run_replay(
+    replay_batches = run_replay(
         csv_path=csv_path,
         window_size=args.window_size,
         label_delay_batches=args.label_delay_batches,
@@ -118,6 +125,35 @@ def main() -> None:
         max_rows=args.max_rows,
         dlq_path=dlq_path,
     )
+    shadow_batch_ids: List[str] = []
+    if args.enable_shadow_buffer:
+        shadow_batch_ids = _select_shadow_batch_ids(
+            num_batches=replay_batches,
+            seed=args.seed,
+            shadow_batches=args.shadow_batches,
+        )
+
+    run_meta = {
+        "event_type": "run_meta",
+        "dataset_id": args.dataset_id,
+        "window_size": args.window_size,
+        "max_rows": args.max_rows,
+        "label_delay_batches": args.label_delay_batches,
+        "ref_window": args.ref_window,
+        "threshold": args.threshold,
+        "threshold_full": args.threshold_full,
+        "policy": args.policy,
+        "consecutive_k": args.consecutive_k,
+        "fixed_interval": args.fixed_interval,
+        "cooldown": args.cooldown,
+        "shadow_batch_ids": shadow_batch_ids,
+        "seed": args.seed,
+        "git_commit": git_commit,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with canonical_output.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(run_meta) + "\n")
+
     append_file_to_canonical(replay_output, canonical_output)
 
     run_monitor(
@@ -134,6 +170,7 @@ def main() -> None:
         states_path=state_output,
         actions_path=actions_output,
         threshold=args.threshold,
+        threshold_full=args.threshold_full,
         action_start=1,
         seed=args.seed,
         consecutive_k=args.consecutive_k,
@@ -159,6 +196,8 @@ def main() -> None:
         states_path=state_output,
         csv_path=csv_path,
         window_size=args.window_size,
+        shadow_batch_ids=shadow_batch_ids,
+        retrain_window_batches=args.retrain_window_batches,
     )
     append_file_to_canonical(trainer_output, canonical_output)
 

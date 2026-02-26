@@ -15,3 +15,6 @@ class CostEvent(BaseEvent):
     executed: StrictBool
     reason_code: StrictStr
     accuracy_pre: Optional[StrictFloat] = None
+    shadow_accuracy_pre: Optional[StrictFloat] = None
+    shadow_accuracy_post: Optional[StrictFloat] = None
+    delta_shadow: Optional[StrictFloat] = None
