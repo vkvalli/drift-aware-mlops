@@ -1,0 +1,4 @@
+run_name,policy,threshold,consecutive_k,fixed_interval,cooldown,seed,window_size,ref_window,label_delay_batches,max_rows,batch_count,action_count,fine_tune_count,total_cost_usd,cost_per_update,action_rate,accuracy_count,accuracy_mean,accuracy_std,accuracy_min,accuracy_last
+policy=fixed_interval_N10_cd0_seed111,fixed_interval,1.8,3,10,0,111,200,3,2,40000,196,196,19,28.5,1.5,0.0969,18,0.6153,0.3104,0.155,0.9
+policy=no_retrain_seed111,no_retrain,1.8,3,10,0,111,200,3,2,40000,196,196,0,0.0,0.0,0.0,0,NA,NA,NA,NA
+policy=threshold_persistence_T1.8_K3_cd0_seed111,threshold_persistence,1.8,3,10,0,111,200,3,2,40000,196,196,27,40.5,1.5,0.1378,26,0.6573,0.2511,0.2,0.98

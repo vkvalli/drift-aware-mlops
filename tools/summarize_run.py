@@ -53,11 +53,17 @@ def summarize(events_path: Path, out_path: Path, shift_batch: Optional[int]) -> 
 
     executed_updates = [u for u in updates if bool(u.get("executed", False))]
     accuracies = []
+    balanced_accuracies = []
+    f1_values = []
     sklearn_flags = []
     for u in executed_updates:
         summary = u.get("eval_summary") or {}
         if "accuracy" in summary:
             accuracies.append(float(summary.get("accuracy")))
+        if "balanced_accuracy" in summary:
+            balanced_accuracies.append(float(summary.get("balanced_accuracy")))
+        if "f1" in summary:
+            f1_values.append(float(summary.get("f1")))
         if "sklearn_available" in summary:
             sklearn_flags.append(bool(summary.get("sklearn_available")))
 
@@ -105,6 +111,18 @@ def summarize(events_path: Path, out_path: Path, shift_batch: Optional[int]) -> 
             f.write("accuracy_min=NA\n")
             f.write("accuracy_max=NA\n")
             f.write("accuracy_last=NA\n")
+        if balanced_accuracies:
+            f.write(f"balanced_accuracy_count={len(balanced_accuracies)}\n")
+            f.write(f"balanced_accuracy_mean={sum(balanced_accuracies)/len(balanced_accuracies):.6f}\n")
+        else:
+            f.write("balanced_accuracy_count=0\n")
+            f.write("balanced_accuracy_mean=NA\n")
+        if f1_values:
+            f.write(f"f1_count={len(f1_values)}\n")
+            f.write(f"f1_mean={sum(f1_values)/len(f1_values):.6f}\n")
+        else:
+            f.write("f1_count=0\n")
+            f.write("f1_mean=NA\n")
         if sklearn_available_rate is not None:
             f.write(f"sklearn_available_rate={sklearn_available_rate:.4f}\n")
         else:

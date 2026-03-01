@@ -1,7 +1,7 @@
 from typing import Optional
 
 from src.schemas.base import BaseEvent
-from src.schemas.compat import StrictBool, StrictFloat, StrictStr
+from src.schemas.compat import StrictBool, StrictFloat, StrictInt, StrictStr
 
 
 class CostEvent(BaseEvent):
@@ -15,6 +15,14 @@ class CostEvent(BaseEvent):
     executed: StrictBool
     reason_code: StrictStr
     accuracy_pre: Optional[StrictFloat] = None
+    balanced_accuracy_pre: Optional[StrictFloat] = None
+    f1_pre: Optional[StrictFloat] = None
+    precision_pre: Optional[StrictFloat] = None
+    recall_pre: Optional[StrictFloat] = None
+    tp_pre: Optional[StrictInt] = None
+    fp_pre: Optional[StrictInt] = None
+    tn_pre: Optional[StrictInt] = None
+    fn_pre: Optional[StrictInt] = None
     shadow_accuracy_pre: Optional[StrictFloat] = None
     shadow_accuracy_post: Optional[StrictFloat] = None
     delta_shadow: Optional[StrictFloat] = None

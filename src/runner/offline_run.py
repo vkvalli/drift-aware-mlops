@@ -1,10 +1,11 @@
 import argparse
+import csv
 import json
 import random
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from src.ingestion.replay import run_replay
 from src.monitor.monitor import run_monitor
@@ -33,6 +34,36 @@ def _select_shadow_batch_ids(num_batches: int, seed: int, shadow_batches: int) -
     return [_batch_id_from_zero_index(i) for i in picked]
 
 
+def _label_distribution(csv_path: Path, label_column: str, max_rows: Optional[int]) -> dict:
+    counts = {"0": 0, "1": 0, "other": 0}
+    total = 0
+    try:
+        with csv_path.open("r", encoding="utf-8", newline="", errors="replace") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if max_rows is not None and total >= max_rows:
+                    break
+                total += 1
+                raw = str(row.get(label_column, "")).strip()
+                if raw == "":
+                    counts["other"] += 1
+                elif raw in {"1", "1.0"} or raw.upper() in {"UP", "TRUE"}:
+                    counts["1"] += 1
+                elif raw in {"0", "0.0"} or raw.upper() in {"DOWN", "FALSE"}:
+                    counts["0"] += 1
+                else:
+                    counts["other"] += 1
+    except Exception:
+        return {"available": False}
+    positive_rate = counts["1"] / total if total else None
+    return {
+        "available": True,
+        "total": total,
+        "counts": counts,
+        "positive_rate": positive_rate,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run offline ingestion + monitor")
     parser.add_argument("--csv", required=True, help="Path to source CSV")
@@ -56,6 +87,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--dataset-id", type=str, default="electricity")
     parser.add_argument("--model-version", type=str, default="m_000001")
+    parser.add_argument("--label-column", type=str, default="class")
+    parser.add_argument("--positive-label", type=str, default="UP")
     parser.add_argument("--replay-output", type=str, default="artifacts/replay.jsonl")
     parser.add_argument("--state-output", type=str, default="artifacts/state.jsonl")
     parser.add_argument("--actions-output", type=str, default="artifacts/actions.jsonl")
@@ -146,6 +179,9 @@ def main() -> None:
         "consecutive_k": args.consecutive_k,
         "fixed_interval": args.fixed_interval,
         "cooldown": args.cooldown,
+        "label_column": args.label_column,
+        "positive_label": args.positive_label,
+        "label_distribution": _label_distribution(csv_path, args.label_column, args.max_rows),
         "shadow_batch_ids": shadow_batch_ids,
         "seed": args.seed,
         "git_commit": git_commit,
@@ -195,6 +231,8 @@ def main() -> None:
         dlq_path=dlq_path,
         states_path=state_output,
         csv_path=csv_path,
+        label_column=args.label_column,
+        positive_label=args.positive_label,
         window_size=args.window_size,
         shadow_batch_ids=shadow_batch_ids,
         retrain_window_batches=args.retrain_window_batches,
