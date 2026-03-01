@@ -358,3 +358,185 @@ Run Parameters (summary.csv) — `runs/matrix_20260212_030832/summary.csv`
 | policy=linucb_seed111 | linucb | 0.1 | 1 | 10 | 0 | 111 | 200 | 3 | 2 | 20000 | 100 | 100 | 3 | 4.5 | 1.5 | 0.03 | 2 | 0.3425 | 0.2369 | 0.175 | 0.51 |
 | policy=linucb_seed222 | linucb | 0.1 | 1 | 10 | 0 | 222 | 200 | 3 | 2 | 20000 | 100 | 100 | 3 | 4.5 | 1.5 | 0.03 | 2 | 0.6675 | 0.2227 | 0.51 | 0.51 |
 | policy=linucb_seed333 | linucb | 0.1 | 1 | 10 | 0 | 333 | 200 | 3 | 2 | 20000 | 100 | 100 | 3 | 4.5 | 1.5 | 0.03 | 2 | 0.3275 | 0.2581 | 0.145 | 0.51 |
+
+## Airline Dataset (40k Slice) — Preparation + Sanity Baselines
+
+### Data Assembly and Cleaning
+
+Source dataset was monthly DOT files for 2018 and 2019 (24 files total), first aggregated into:
+- `data/airline/airline_2018_2019.csv`
+
+Cleaning/preprocessing script:
+- `tools/clean_airline_dataset.py`
+
+Cleaning rules applied:
+- Keep columns:
+  - `Year`, `Month`, `DayOfWeek`, `Reporting_Airline`, `Origin`, `Dest`, `CRSDepTime`, `CRSArrTime`, `CRSElapsedTime`, `Distance`, `Cancelled`, `Diverted`, `ArrDel15`
+- Drop rows:
+  - `Cancelled == 1`
+  - `ArrDelay` is null/empty
+- Additional normalization:
+  - `CRSDepTime`/`CRSArrTime` converted HHMM -> minutes since midnight
+  - categorical fields uppercased/trimmed (`Reporting_Airline`, `Origin`, `Dest`)
+  - invalid numeric/time rows removed
+  - `ArrDel15` normalized to binary `{0,1}`
+
+40k slice outputs used for pipeline sanity:
+- `data/airline_2018_2019_clean_40k.csv`
+- `data/airline_2018_2019_model_ready_40k.csv`
+
+Model-ready encoding (for 40k slice):
+- `Reporting_Airline`: one-hot (observed categories in slice)
+- `Origin`: top-50 one-hot + `origin__OTHER`
+- `Dest`: top-50 one-hot + `dest__OTHER`
+
+### Label Balance Check (ArrDel15)
+
+From `data/airline_2018_2019_clean_40k.csv`:
+- `rows=39049`
+- `class_1=6837`
+- `class_0=32212`
+- `mean(ArrDel15)=0.1751`
+
+This confirms class imbalance; raw accuracy alone is not sufficient for policy comparison.
+
+### Pipeline/Metric Updates for Airline
+
+To support defensible airline evaluation:
+- trainer now supports configurable labels:
+  - `--label-column ArrDel15`
+  - `--positive-label 1`
+- drift monitor excludes label leakage columns:
+  - `ArrDel15/arrdel15`, `class`
+- no-retrain/defer now logs per-step pre-eval metrics (not NA-only):
+  - `accuracy_pre`, `balanced_accuracy_pre`, `f1_pre`, `precision_pre`, `recall_pre`
+- update `eval_summary` now logs:
+  - `accuracy`, `balanced_accuracy`, `f1`, `precision`, `recall`, `n_samples`
+- run metadata now includes label distribution:
+  - `run_meta.label_distribution` (counts + positive_rate)
+
+### 40k Baseline Sanity Matrix (no RL)
+
+Run folder:
+- `runs/matrix_20260301_035230`
+
+Settings:
+- `window_size=200`, `max_rows=40000`, `label_delay_batches=2`, `ref_window=3`
+- policies: `no_retrain`, `fixed_interval(N=10)`, `threshold_persistence(T=1.8,K=3)`
+- dataset label: `ArrDel15`
+
+Results:
+- `no_retrain`:
+  - `fine_tune_count=0`
+  - `accuracy_mean=0.8285`
+  - `balanced_accuracy_mean=0.5000`
+  - `f1_mean=0.0000`
+- `fixed_interval (N=10)`:
+  - `fine_tune_count=19`
+  - `total_cost_usd=28.5`
+  - `balanced_accuracy_mean=0.5038`
+  - `f1_mean=0.1236`
+- `threshold_persistence (T=1.8,K=3)`:
+  - `fine_tune_count=27`
+  - `total_cost_usd=40.5`
+  - `balanced_accuracy_mean=0.4985`
+  - `f1_mean=0.0905`
+
+Interpretation:
+- on this imbalanced slice, plain accuracy is inflated by majority-class behavior.
+- balanced accuracy/F1 are now the primary sanity metrics for airline.
+
+### 40k Threshold + Full Retrain Sanity
+
+Run folder:
+- `runs/matrix_20260301_035253`
+
+Settings:
+- `threshold=1.8`, `threshold_full=3.5`, `K=3`
+
+Action counts:
+- `defer=169`
+- `fine_tune=19`
+- `full_retrain=8`
+
+This confirms full-retrain is wired and triggers occasionally under high-drift segments.
+
+### Airline 40k Ablation: Class Weighting (sample_weight in `partial_fit`)
+
+Purpose:
+- isolate the effect of class-weighted updates on imbalanced `ArrDel15` prediction.
+- same slice, same windowing, same policies; only trainer update weighting changed.
+
+Compared runs:
+- unweighted trainer: `runs/matrix_20260301_035230/summary.csv`
+- weighted trainer: `runs/matrix_20260301_041127/summary.csv`
+
+| Policy | balanced_accuracy_mean (unweighted) | balanced_accuracy_mean (weighted) | f1_mean (unweighted) | f1_mean (weighted) |
+| --- | --- | --- | --- | --- |
+| no_retrain | 0.5000 | 0.5000 | 0.0000 | 0.0000 |
+| fixed_interval (N=10) | 0.5038 | 0.5041 | 0.1236 | 0.1749 |
+| threshold_persistence (T=1.8, K=3) | 0.4985 | 0.5003 | 0.0905 | 0.1603 |
+
+Interpretation:
+- class weighting gives a clear **F1 improvement** for retraining policies on this imbalanced slice.
+- balanced accuracy improves only marginally and remains close to 0.50, indicating positive-class recall is still constrained.
+- this supports using balanced metrics (and confusion counts) as the primary diagnostics for airline, rather than raw accuracy.
+
+## Airline RL Operating Point (Locked)
+
+Operating point (locked for airline RL):
+- reward mode: `rolling` with `ΔF1` (`perf_field=f1_pre`, `perf_window=10`)
+- reward params: `w_cost=0.25`, `action_penalty=0.02`, `normalize_perf=true`, `defer_bonus=0.01`, `defer_threshold=0.2`
+- policy model: `LinUCB(alpha=0.25)`
+- exploration schedule: `warm_start_n=20`, `warm_start_k=8`, `epsilon1=0.02`, `epsilon1_steps=30`, `epsilon2=0.02`
+- coverage target: `mean update_count >= 8`
+
+Why we switched from `Δaccuracy` to `ΔF1` on Airline:
+- Airline is imbalanced (`ArrDel15` positives are a minority), so `Δaccuracy` over-rewards majority-class behavior (e.g., deferring while predicting mostly negatives). `ΔF1` better reflects minority-class retrieval quality and yields a more task-aligned retraining signal.
+
+Locked run:
+- `runs/matrix_20260301_054818/summary.csv`
+
+Calibration framing:
+- “We used a gated calibration procedure, not outcome chasing.”
+- Gate 1: `action_rate <= 0.10`
+- Gate 2: `update_count_mean >= 8`
+- Gate 3: `reward_mean` within neutral band (`>= -0.005`)
+
+Reward neutrality note:
+- “Because reward includes explicit cost penalties, mean reward near zero indicates a balanced operating point; we treat values within ±0.005 as neutral.”
+
+Gate outcome for locked run:
+- Gate 1: PASS (`action_rate_mean=0.0148`)
+- Gate 2: PASS (`update_accuracy_count_mean=8.67`)
+- Gate 3: PASS (`reward_mean` per-seed: `-0.0005`, `0.0016`, `0.0020`; all within neutral band)
+
+### Airline 120k Policy Comparison (single table)
+
+Source artifact:
+- `runs/airline_120k_policy_comparison.csv`
+
+| Policy | Mean Updates | Mean Action Rate | Mean Cost (USD) | Mean F1 | Mean Balanced Accuracy |
+| --- | --- | --- | --- | --- | --- |
+| fixed_interval (N=10) | 58.00 | 0.0991 | 87.00 | 0.1632 | 0.5091 |
+| threshold_persistence (T=1.8, K=3) | 67.00 | 0.1145 | 100.50 | 0.1541 | 0.4999 |
+| linucb (locked) | 8.67 | 0.0148 | 13.00 | 0.2166 | 0.5117 |
+
+Interpretation:
+- Locked LinUCB is much lower-cost and lower-action-rate than rule baselines.
+- It is competitive on balanced accuracy and higher on mean F1 versus both baselines in this 120k setup.
+
+### Cross-Dataset Metric-Reuse Sanity (anti-contamination check)
+
+We explicitly tested “electricity-style” RL reward on airline (`Δaccuracy`) and compared with airline-appropriate reward (`ΔF1`).
+
+Accuracy-reward run:
+- `runs/matrix_20260301_060510/summary.csv`
+- result: very high update rates (`~0.28–0.29` action rate), high cost (`~244.5–258.0`), and weak task alignment under imbalance.
+
+F1-reward locked run:
+- `runs/matrix_20260301_054818/summary.csv`
+- result: controlled updates (`~0.010–0.019` action rate), low cost (`9.0–16.5`), and stronger F1-oriented behavior.
+
+Conclusion:
+- this validates metric-to-task matching (Airline uses `ΔF1`), rather than tuning for a single dataset’s success criterion.

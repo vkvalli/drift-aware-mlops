@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--policies", type=str, default="no_retrain,fixed_interval,threshold_persistence")
     parser.add_argument("--dataset-id", type=str, default="electricity")
     parser.add_argument("--model-version", type=str, default="m_000001")
+    parser.add_argument("--label-column", type=str, default="class")
+    parser.add_argument("--positive-label", type=str, default="UP")
     parser.add_argument("--outdir", type=str, default="runs")
     parser.add_argument("--linucb-model", type=str, default="artifacts/policies/linucb.pkl")
     parser.add_argument("--warm-start-n", type=int, default=30)
@@ -132,6 +134,10 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
             args.dataset_id,
             "--model-version",
             args.model_version,
+            "--label-column",
+            args.label_column,
+            "--positive-label",
+            args.positive_label,
             "--replay-output",
             str(run_dir / "replay.jsonl"),
             "--state-output",

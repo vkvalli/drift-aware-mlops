@@ -13,6 +13,9 @@ from src.utils.ids import IdCounter
 
 EXCLUDED_COLUMNS = {
     "label",
+    "class",
+    "ArrDel15",
+    "arrdel15",
     "timestamp_start",
     "timestamp_end",
     "row_id",

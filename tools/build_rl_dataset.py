@@ -53,6 +53,7 @@ def build_dataset(
     action_penalty: float,
     defer_bonus: float,
     defer_threshold: float,
+    perf_field: str,
 ) -> None:
     events = _load_events(events_path)
 
@@ -62,9 +63,9 @@ def build_dataset(
     updates = {e["action_id"]: e for e in events if e.get("event_type") == "model_update"}
 
     rows: List[Dict] = []
-    prev_acc = 0.0
-    acc_series: List[float] = []
-    raw_acc_series: List[float] = []
+    prev_perf = 0.0
+    perf_series: List[float] = []
+    raw_perf_series: List[float] = []
     t = 0
     for action in actions:
         state = states.get(action.get("state_id"))
@@ -72,25 +73,38 @@ def build_dataset(
         update = updates.get(action.get("action_id"))
 
         accuracy_pre = None
+        balanced_accuracy_pre = None
+        f1_pre = None
         if cost:
             accuracy_pre = cost.get("accuracy_pre")
-        if accuracy_pre is None:
-            acc_val = prev_acc
-        else:
-            acc_val = float(accuracy_pre)
+            balanced_accuracy_pre = cost.get("balanced_accuracy_pre")
+            f1_pre = cost.get("f1_pre")
 
-        raw_acc_series.append(acc_val)
-        acc_series.append(acc_val)
+        perf_pre = None
+        if perf_field == "f1_pre":
+            perf_pre = f1_pre
+        elif perf_field == "balanced_accuracy_pre":
+            perf_pre = balanced_accuracy_pre
+        else:
+            perf_pre = accuracy_pre
+
+        if perf_pre is None:
+            perf_val = prev_perf
+        else:
+            perf_val = float(perf_pre)
+
+        raw_perf_series.append(perf_val)
+        perf_series.append(perf_val)
 
         if reward_mode == "shadow":
-            delta_acc = 0.0
+            delta_perf = 0.0
             if cost and cost.get("delta_shadow") is not None:
-                delta_acc = float(cost.get("delta_shadow"))
+                delta_perf = float(cost.get("delta_shadow"))
         elif reward_mode == "rolling":
-            delta_acc = _rolling_delta(acc_series, perf_window, t)
+            delta_perf = _rolling_delta(perf_series, perf_window, t)
         else:
-            delta_acc = acc_val - prev_acc
-        prev_acc = acc_val
+            delta_perf = perf_val - prev_perf
+        prev_perf = perf_val
 
         row = {
             "t": t,
@@ -103,26 +117,29 @@ def build_dataset(
             "cooldown_active": int(bool(state.get("cooldown_active", False))) if state else 0,
             "action_type": action.get("action_type"),
             "accuracy_pre": accuracy_pre if accuracy_pre is not None else "",
+            "balanced_accuracy_pre": balanced_accuracy_pre if balanced_accuracy_pre is not None else "",
+            "f1_pre": f1_pre if f1_pre is not None else "",
+            "perf_pre": perf_pre if perf_pre is not None else "",
             "cost_usd": _safe_float(cost.get("estimated_usd") if cost else 0.0),
             "model_version": action.get("model_version", ""),
             "new_model_version": update.get("new_model_version", "") if update else "",
-            "delta_acc": delta_acc,
+            "delta_perf": delta_perf,
         }
         rows.append(row)
         t += 1
 
     if normalize_perf:
-        perf_max = max(raw_acc_series) if raw_acc_series else 0.0
+        perf_max = max(raw_perf_series) if raw_perf_series else 0.0
         if perf_max > 0:
-            acc_series = [val / perf_max for val in acc_series]
-            prev_acc = 0.0
+            perf_series = [val / perf_max for val in perf_series]
+            prev_perf = 0.0
             for idx, r in enumerate(rows):
                 if reward_mode == "rolling":
-                    delta_acc = _rolling_delta(acc_series, perf_window, idx)
+                    delta_perf = _rolling_delta(perf_series, perf_window, idx)
                 else:
-                    delta_acc = acc_series[idx] - prev_acc
-                prev_acc = acc_series[idx]
-                r["delta_acc"] = delta_acc
+                    delta_perf = perf_series[idx] - prev_perf
+                prev_perf = perf_series[idx]
+                r["delta_perf"] = delta_perf
 
     c_max = max((r["cost_usd"] for r in rows), default=0.0)
     for r in rows:
@@ -130,7 +147,7 @@ def build_dataset(
             r["cost_norm"] = 0.0
         else:
             r["cost_norm"] = r["cost_usd"] / c_max
-        reward = r["delta_acc"] - w_cost * r["cost_norm"]
+        reward = r["delta_perf"] - w_cost * r["cost_norm"]
         if r.get("action_type") == "defer" and w_drift > 0.0:
             drift_val = float(r.get("drift_core", 0.0))
             if drift_val >= drift_threshold:
@@ -155,9 +172,12 @@ def build_dataset(
         "cooldown_active",
         "action_type",
         "accuracy_pre",
+        "balanced_accuracy_pre",
+        "f1_pre",
+        "perf_pre",
         "cost_usd",
         "cost_norm",
-        "delta_acc",
+        "delta_perf",
         "reward",
         "model_version",
         "new_model_version",
@@ -167,14 +187,15 @@ def build_dataset(
         writer.writeheader()
         writer.writerows(rows)
 
-    _print_stats(rows, c_max)
+    _print_stats(rows, c_max, perf_field)
 
 
-def _print_stats(rows: List[Dict], c_max: float) -> None:
+def _print_stats(rows: List[Dict], c_max: float, perf_field: str) -> None:
     n = len(rows)
     fine_tune = sum(1 for r in rows if r.get("action_type") == "fine_tune")
     acc_vals = [float(r["accuracy_pre"]) for r in rows if r.get("accuracy_pre") not in ("", None)]
-    delta_vals = [float(r["delta_acc"]) for r in rows]
+    perf_vals = [float(r["perf_pre"]) for r in rows if r.get("perf_pre") not in ("", None)]
+    delta_vals = [float(r["delta_perf"]) for r in rows]
     reward_vals = [float(r["reward"]) for r in rows]
 
     def _mean(vals: List[float]) -> float:
@@ -190,8 +211,10 @@ def _print_stats(rows: List[Dict], c_max: float) -> None:
     print(f"fine_tune_rate={fine_tune / n if n else 0.0:.4f}")
     print(f"accuracy_pre_mean={_mean(acc_vals):.4f}")
     print(f"accuracy_pre_std={_std(acc_vals):.4f}")
-    print(f"delta_acc_mean={_mean(delta_vals):.4f}")
-    print(f"delta_acc_std={_std(delta_vals):.4f}")
+    print(f"{perf_field}_mean={_mean(perf_vals):.4f}")
+    print(f"{perf_field}_std={_std(perf_vals):.4f}")
+    print(f"delta_perf_mean={_mean(delta_vals):.4f}")
+    print(f"delta_perf_std={_std(delta_vals):.4f}")
     print(f"reward_mean={_mean(reward_vals):.4f}")
     print(f"reward_std={_std(reward_vals):.4f}")
     print(f"C_max={c_max:.4f}")
@@ -210,6 +233,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--action-penalty", type=float, default=0.0)
     parser.add_argument("--defer-bonus", type=float, default=0.0)
     parser.add_argument("--defer-threshold", type=float, default=0.0)
+    parser.add_argument(
+        "--perf-field",
+        choices=["accuracy_pre", "balanced_accuracy_pre", "f1_pre"],
+        default="accuracy_pre",
+    )
     return parser
 
 
@@ -228,6 +256,7 @@ def main() -> None:
         args.action_penalty,
         args.defer_bonus,
         args.defer_threshold,
+        args.perf_field,
     )
 
 

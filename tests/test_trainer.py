@@ -45,6 +45,69 @@ class TestTrainer(unittest.TestCase):
         ]
         path.write_text("\n".join(json.dumps(a) for a in actions))
 
+    def _write_states(self, path: Path) -> None:
+        states = [
+            {
+                "event_type": "state",
+                "state_id": "s_000001",
+                "batch_id": "b_000001",
+                "window_id": "w_000001",
+                "timestamp": 1.0,
+                "model_version": "m_000001",
+                "label_available": True,
+                "drift_core": 0.1,
+                "drift_max": 0.1,
+                "drift_ready": True,
+                "perf_core": 0.0,
+                "fairness_core": 0.0,
+            },
+            {
+                "event_type": "state",
+                "state_id": "s_000002",
+                "batch_id": "b_000002",
+                "window_id": "w_000002",
+                "timestamp": 2.0,
+                "model_version": "m_000001",
+                "label_available": True,
+                "drift_core": 0.2,
+                "drift_max": 0.2,
+                "drift_ready": True,
+                "perf_core": 0.0,
+                "fairness_core": 0.0,
+            },
+            {
+                "event_type": "state",
+                "state_id": "s_000003",
+                "batch_id": "b_000003",
+                "window_id": "w_000003",
+                "timestamp": 3.0,
+                "model_version": "m_000001",
+                "label_available": True,
+                "drift_core": 0.3,
+                "drift_max": 0.3,
+                "drift_ready": True,
+                "perf_core": 0.0,
+                "fairness_core": 0.0,
+            },
+        ]
+        path.write_text("\n".join(json.dumps(s) for s in states))
+
+    def _write_airline_csv(self, path: Path) -> None:
+        path.write_text(
+            "\n".join(
+                [
+                    "Year,Month,DayOfWeek,CRSDepTime,CRSArrTime,CRSElapsedTime,Distance,Cancelled,Diverted,ArrDel15",
+                    "2018,1,1,300,420,120,500,0,0,0",
+                    "2018,1,2,310,430,120,510,0,0,1",
+                    "2018,1,3,320,440,120,520,0,0,0",
+                    "2018,1,4,330,450,120,530,0,0,1",
+                    "2018,1,5,340,460,120,540,0,0,0",
+                    "2018,1,6,350,470,120,550,0,0,1",
+                ]
+            )
+            + "\n"
+        )
+
     def test_basic_execution(self):
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -144,6 +207,51 @@ class TestTrainer(unittest.TestCase):
             seq1 = _normalize(events_path_1.read_text().splitlines())
             seq2 = _normalize(events_path_2.read_text().splitlines())
             self.assertEqual(seq1, seq2)
+
+    def test_logs_balanced_metrics_for_defer_and_updates(self):
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            actions_path = tmp / "actions.jsonl"
+            states_path = tmp / "states.jsonl"
+            csv_path = tmp / "airline.csv"
+            events_path = tmp / "events.jsonl"
+            processed_path = tmp / "processed.jsonl"
+
+            self._write_actions(actions_path)
+            self._write_states(states_path)
+            self._write_airline_csv(csv_path)
+
+            run_trainer(
+                actions_path=actions_path,
+                events_path=events_path,
+                processed_index_path=processed_path,
+                seed=1,
+                states_path=states_path,
+                csv_path=csv_path,
+                label_column="ArrDel15",
+                positive_label="1",
+                window_size=2,
+            )
+
+            records = [json.loads(line) for line in events_path.read_text().splitlines()]
+            cost_records = [r for r in records if r["event_type"] == "cost"]
+            update_records = [r for r in records if r["event_type"] == "model_update"]
+
+            # defer event should still carry pre-eval metrics
+            self.assertIsNotNone(cost_records[0].get("accuracy_pre"))
+            self.assertIsNotNone(cost_records[0].get("balanced_accuracy_pre"))
+            self.assertIsNotNone(cost_records[0].get("f1_pre"))
+            self.assertIsNotNone(cost_records[0].get("tp_pre"))
+            self.assertIsNotNone(cost_records[0].get("fp_pre"))
+            self.assertIsNotNone(cost_records[0].get("tn_pre"))
+            self.assertIsNotNone(cost_records[0].get("fn_pre"))
+
+            # executed updates should publish richer eval summary metrics
+            self.assertTrue(update_records)
+            eval_summary = update_records[0].get("eval_summary", {})
+            self.assertIn("accuracy", eval_summary)
+            self.assertIn("balanced_accuracy", eval_summary)
+            self.assertIn("f1", eval_summary)
 
 
 if __name__ == "__main__":

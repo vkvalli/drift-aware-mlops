@@ -319,6 +319,19 @@ Default RL reward (implementation choice)
 
 For the current MVP RL training, we use a rolling performance delta (windowed Δaccuracy) as the default reward to reduce jitter and provide a denser learning signal. Raw Δaccuracy is retained as an ablation. See `docs/experiments_log.md` for the raw vs rolling comparison.
 
+Dataset-specific performance scalar
+
+For imbalanced classification datasets (Airline), we use rolling `ΔF1` as the RL performance term instead of `Δaccuracy`. This avoids majority-class reward bias and aligns retraining decisions with minority-class utility. Electricity retains `Δaccuracy`.
+
+Airline RL operating point (locked)
+
+- Reward: rolling `ΔF1`, `w_cost=0.25`, `action_penalty=0.02`, `normalize_perf=true`, `defer_bonus=0.01`, `defer_threshold=0.2`
+- Policy: `LinUCB(alpha=0.25)`
+- Exploration: `warm_start_n=20`, `warm_start_k=8`, `epsilon1=0.02`, `epsilon1_steps=30`, `epsilon2=0.02`
+- Calibration gates: `action_rate <= 0.10`, `update_count_mean >= 8`, reward neutral band `>= -0.005`
+
+We treat this as a gated calibration procedure (not outcome chasing): first satisfy safety/coverage gates, then compare performance metrics across policies. See `docs/experiments_log.md` for numeric evidence.
+
 Delayed Feedback Handling
 
 When labels are delayed, rewards are computed asynchronously using the label stream and appended to the decision trace using state_id and model_version. The policy-agent does not see these rewards at decision time, preventing leakage.
