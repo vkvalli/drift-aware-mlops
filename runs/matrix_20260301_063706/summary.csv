@@ -1,0 +1,4 @@
+run_name,policy,threshold,consecutive_k,fixed_interval,cooldown,seed,window_size,ref_window,label_delay_batches,max_rows,batch_count,action_count,fine_tune_count,total_cost_usd,cost_per_update,action_rate,accuracy_count,accuracy_mean,accuracy_std,accuracy_min,accuracy_last,balanced_accuracy_count,balanced_accuracy_mean,balanced_accuracy_std,balanced_accuracy_min,balanced_accuracy_last,f1_count,f1_mean,f1_std,f1_min,f1_last,update_accuracy_count
+policy=linucb_seed111,linucb,0.1,1,10,0,111,200,3,5,20000,100,100,74,111.0,1.5,0.74,95,0.6501,0.1489,0.27,0.82,95,0.6534,0.1217,0.4537,0.8221,95,0.5589,0.262,0.0,0.8163,74
+policy=linucb_seed222,linucb,0.1,1,10,0,222,200,3,5,20000,100,100,74,111.0,1.5,0.74,95,0.6414,0.1451,0.24,0.73,95,0.6356,0.1282,0.3247,0.7396,95,0.5118,0.2805,0.0,0.6582,74
+policy=linucb_seed333,linucb,0.1,1,10,0,333,200,3,5,20000,100,100,74,111.0,1.5,0.74,95,0.6304,0.145,0.24,0.66,95,0.6237,0.1208,0.3396,0.6506,95,0.5299,0.2642,0.0,0.7302,74
