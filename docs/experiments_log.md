@@ -540,3 +540,48 @@ F1-reward locked run:
 
 Conclusion:
 - this validates metric-to-task matching (Airline uses `ΔF1`), rather than tuning for a single dataset’s success criterion.
+
+## Delayed-Label Stress Suite (Electricity + Airline)
+
+Stress setup:
+- `label_delay_batches ∈ {0, 2, 5, 10}`
+- fixed seeds: `111, 222, 333`
+- fixed windowing per dataset
+- source summary: `runs/delay_stress_summary.csv`
+
+Electricity (calibrated less aggressive for stress):
+- RL model: `artifacts/policies/linucb_electricity_conservative.pkl`
+- schedule: `warm_start_n=20`, `warm_start_k=8`, `epsilon1=0.02`, `epsilon1_steps=30`, `epsilon2=0.02`
+- performance metric: `accuracy`
+
+Airline (locked RL operating point):
+- RL model: `artifacts/policies/linucb_airline_f1_alpha025_pen002.pkl`
+- schedule: `warm_start_n=20`, `warm_start_k=8`, `epsilon1=0.02`, `epsilon1_steps=30`, `epsilon2=0.02`
+- performance metric: `F1` (with balanced accuracy tracked)
+
+### Delay Stress Results (means across seeds)
+
+| Dataset | label_delay_batches | action_rate | total_cost_usd | update_count | perf_mean | reward_mean | proxy_vs_ground_truth_gap |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| electricity | 0 | 0.0300 | 4.5 | 3.0 | 0.6233 (accuracy) | 0.0125 | 0.2342 |
+| electricity | 2 | 0.0300 | 4.5 | 3.0 | 0.6249 (accuracy) | 0.0145 | 0.2297 |
+| electricity | 5 | 0.0300 | 4.5 | 3.0 | 0.6295 (accuracy) | 0.0211 | 0.2367 |
+| electricity | 10 | 0.0300 | 3.0 | 2.0 | 0.6423 (accuracy) | 0.0536 | 0.2277 |
+| airline | 0 | 0.0148 | 13.0 | 8.67 | 0.2159 (F1) | 0.0010 | 0.6008 |
+| airline | 2 | 0.0148 | 13.0 | 8.67 | 0.2166 (F1) | 0.0010 | 0.5995 |
+| airline | 5 | 0.0148 | 13.0 | 8.67 | 0.2178 (F1) | 0.0010 | 0.6045 |
+| airline | 10 | 0.0148 | 11.5 | 7.67 | 0.2173 (F1) | 0.0011 | 0.6044 |
+
+Interpretation:
+- Under conservative calibration, both datasets remain stable as label delay increases.
+- Airline keeps near-constant action rate and cost; update coverage dips slightly at delay=10.
+- Electricity is intentionally low-action in this stress mode, so delay effects are visible without policy overreaction.
+- Proxy-vs-ground-truth gaps remain non-zero, supporting the need for delayed-label correction rather than proxy-only control.
+
+### Construct Validity / Metric Choice
+
+For thesis construct validity, we explicitly separate performance scalars by task characteristics:
+- Electricity uses `accuracy` as the primary scalar.
+- Airline uses `F1`/balanced accuracy due to class imbalance.
+
+This is treated as a measurement-validity choice, not outcome chasing: each dataset is evaluated with a metric aligned to its label distribution and operational objective.

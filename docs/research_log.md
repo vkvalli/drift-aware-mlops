@@ -8,127 +8,97 @@ As a result, there is currently no unified framework that models model retrainin
 
 next steps:
 
-Continue implementing ingestion → monitor → logger
+Do this for fairness:
 
-Option A — Implementation plan
+Step 1: Pick Adult dataset (fastest fairness dataset)
+	•	Binary classification.
+	•	Protected attribute: sex.
+	•	Already tabular.
+	•	Easy to compute DPD/EOD.
 
-Order of services to build
+Step 2: Add fairness metrics to evaluation only
 
-Minimal first runnable loop
+Log:
+	•	dpd_pre
+	•	eod_pre
 
-Heuristic baseline first, RL later
+No RL change yet.
 
-Option B — Results chapter skeleton
+Step 3: Show fairness drift over time
 
-Section headings
+Plot fairness metric vs batch.
 
-Which plots go where
+Step 4: Add fairness to reward (lightweight)
 
-How evaluation maps to claims
+Modify reward:
+R = Δperf - λ_cost * cost - λ_fair * fairness_gap
+Try 2–3 λ_fair values.
 
-Option C — Policy learning details
+Show trade-off curve:
+	•	performance vs fairness vs cost.
 
-First RL/bandit algorithm
+That’s enough.
 
-Training loop pseudocode
+What I’d do (min effort, max defensibility)
+	1.	Keep electricity + airline as your main, fully analyzed RL results.
+	2.	Add AG News (text) with the same pipeline:
+	•	windows, drift signal, policy decisions, reward based on ΔF1 or Δaccuracy with cost.
+	3.	Add Rotated MNIST (image) as a “stress modality”:
+	•	even a small run showing drift triggers and the agent behaving reasonably is enough.
+	4.	Put Google Cluster Trace as “future work / appendix” unless you really want to spend days on data engineering.
 
-When/how to retrain the policy
+This gets you “multiple modalities” without ballooning scope.
 
-next steps:
 
-Nice — this is exactly the **expected** progression: LinUCB went from “all-defer” → “acts a little” once warm-start exists. And your note about `runs/summary.txt` makes sense.
+for regression task:
+Best dataset pick
 
-Two key takeaways from the new LinUCB matrix section in your experiments log :
+Use one of these (in this order):
+	1.	Ames Housing (Kaggle “House Prices: Advanced Regression Techniques”)
 
-## 1) The warm-start worked (wiring is correct)
+	•	Great classic dataset, widely used, tons of features.
+	•	Target: SalePrice.
 
-* `fine_tune_count = 3` per run (forced warm-start behavior)
-* cost shows up (`4.5`), so trainer + cost logging is live
-  That’s the minimum proof your RL policy can *actually* trigger training end-to-end.
+	2.	California Housing (scikit-learn built-in)
 
-## 2) Accuracy_mean = 0.4458 is **not interpretable yet**
+	•	Even easier if you want zero download hassle.
+	•	Target: MedHouseVal (median house value).
 
-And your own table confirms why: **accuracy_count = 2 per run** for LinUCB. 
-With only 2 evaluation points, accuracy_mean is basically noise. This is normal at this stage.
+If your priority is “least moving parts”: pick California Housing.
 
----
+⸻
 
-# What to do now (in order)
+How this maps to your current pipeline
 
-## A) Don’t compare LinUCB to baselines yet
+Right now you log classification metrics (accuracy/F1). For regression you swap:
+	•	Perf metric: MAE or RMSE (I recommend MAE, it’s more stable and interpretable).
+	•	Reward delta: improvement means error goes down.
 
-Right now you have:
+So instead of Δaccuracy you do:
+	•	Δperf = (MAE_pre - MAE_post)  (positive = improvement)
 
-* baselines: accuracy_count ~ 8–19 (good signal)
-* linucb: accuracy_count = 2 (too sparse)
+or in rolling mode:
+	•	Δperf = rolling(MAE_pre_prev) - rolling(MAE_pre_now)
 
-So any mean comparisons are apples-to-oranges.
+Then keep cost penalty exactly the same.
 
-## B) Make LinUCB produce a comparable number of accuracy points
+⸻
 
-You want LinUCB to have **at least ~8–10 updates per run** (similar to your K=5 baseline) so accuracy_mean stabilizes.
+Minimal “regression support” changes you’ll need
+	1.	Trainer supports regression model:
+	•	SGDRegressor (partial_fit works like your SGDClassifier)
+	2.	Eval metrics logged in CostEvent:
+	•	mae_pre, maybe rmse_pre
+	3.	RL dataset builder:
+	•	--perf-field mae_pre
+	•	interpret delta as “lower is better” (invert sign)
 
-Easiest way (keeps the RL story clean):
+That’s it.
 
-### Increase exploration for a while, then decay
+⸻
 
-* warm-start: keep it, but extend it a bit:
+Recommendation
 
-  * **N=30**, force every **k=4** (≈ 7–8 updates)
-* after warm-start, add epsilon-greedy:
-
-  * ε = 0.1 for first 50 steps, then 0.02
-
-This avoids permanent “forced updates” while ensuring enough data to learn.
-
-## C) Add one diagnostic plot for RL learning
-
-Add to your RL section:
-
-* `reward_over_time.svg` (even crude)
-* and/or `action_prob_fine_tune_over_time.svg`
-
-This makes the “learning” visible (and helps debug).
-
----
-
-# About `runs/summary.txt` being empty
-
-You’re right: your aggregator only matches `run_*/plots/run_report.txt`, and matrix runs are `matrix_*/policy=...` folders.
-
-I would fix this, because it’ll save you pain later.
-
-### Minimal fix
-
-Update `tools/aggregate_runs.py` to:
-
-* include any folder containing `plots/run_report.txt` **anywhere under `runs/`**, not just `run_*`
-* and write two sections:
-
-  * “Single runs”
-  * “Matrix runs”
-
-That way your “latest status” file always reflects reality.
-
----
-
-# Tiny correction to your experiments log
-
-In the LinUCB section you wrote: “only 2 accuracy points per run; expected.” That’s correct.
-But I’d add one sentence making it explicit:
-
-> “LinUCB results are not compared to baselines until accuracy_count is comparable (≥8 per run).”
-
-That protects you from reviewer pushback.
-
----
-
-## If you want a single next step:
-
-**Do: “LinUCB exploration schedule + re-run 3 seeds”** until you get `accuracy_count ≈ 8–10` per run.
-Then you can do a fair baseline vs RL comparison.
-
-If you tell me what controls you currently have in the LinUCB policy (warm-start only? any epsilon? alpha?), I’ll suggest exact parameter values to hit ~8–10 updates without exploding cost.
-
+Pick California Housing first (fastest to integrate), then if time allows add Ames for realism.
 
 
