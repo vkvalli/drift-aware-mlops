@@ -388,3 +388,71 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### Next Chunk
 - Milestone E/F: release notes and cleanup checks
+
+
+## Chunk MILESTONE-E-2026-03-06 (2026-03-06T11:49:10.283065+00:00)
+
+### What Changed
+- docs/research_log.md
+
+### Why It Changed
+- Validate GitHub release object for existing v2.0.1 tag using gh CLI
+
+### What To Verify
+- gh auth status
+- gh release view v2.0.1 --json tagName
+- name
+- url
+- isDraft
+- isPrerelease
+
+### Expected Output
+- Authenticated gh session and existing published v2.0.1 release metadata returned
+
+### New Metrics
+- none
+
+### New Plots
+- none
+
+### New Log Fields
+- none
+
+### Known Limitations
+- Release editing/publishing requires valid GitHub auth in local environment
+
+### Next Chunk
+- Milestone F: cleanup and clean status verification
+
+
+## Chunk MILESTONE-F-2026-03-06 (2026-03-06T11:49:16.579894+00:00)
+
+### What Changed
+- .gitignore
+- artifacts/events.jsonl
+
+### Why It Changed
+- Ignore generated run/artifact directories
+- Stop tracking generated canonical artifact for clean working tree hygiene
+
+### What To Verify
+- git check-ignore -v artifacts/events.jsonl
+- git status -sb
+
+### Expected Output
+- artifacts/events.jsonl matched by .gitignore and working tree clean
+
+### New Metrics
+- none
+
+### New Plots
+- none
+
+### New Log Fields
+- none
+
+### Known Limitations
+- Other previously tracked artifacts remain tracked unless explicitly removed
+
+### Next Chunk
+- Milestones complete
