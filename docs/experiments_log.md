@@ -1,6 +1,10 @@
 # Experiments Log
 
-| Setup                          | fine_tune_count | fine_tune_rate | total_cost_usd |
+> Supersession note: early calibration tables in this log are historical records.  
+> Final thesis-facing policy comparisons are maintained in `docs/experiments_summary.md`.
+> Superseded by: `docs/experiments_summary.md` final comparison tables.
+
+| Setup *(superseded by later locked operating points)* | fine_tune_count | fine_tune_rate | total_cost_usd |
 | ------------------------------ | --------------- | -------------- | -------------- |
 | Raw features, T=0.1            | 86              | 0.86           | high           |
 | Time excluded, T=0.1           | 0               | 0.00           | 0              |
@@ -184,7 +188,7 @@ Seeds: `111, 222, 333`
 Warm-start: `N=10`, `k=3` (force fine_tune every 3rd step during first 10 decisions)
 
 Accuracy gallery (policy-only):
-![LinUCB accuracy gallery](/Users/csuftitan/Desktop/Thesis/drift-aware-mlops/.worktrees/implementation/runs/matrix_20260212_030832/plots/accuracy_gallery.svg)
+![LinUCB accuracy gallery](../runs/matrix_20260212_030832/plots/accuracy_gallery.svg)
 
 Policy-level means:
 - linucb: fine_tune_mean = 3.0, cost_mean = 4.5, accuracy_mean = 0.4458
@@ -283,7 +287,7 @@ Sources:
 | linucb (epsilon2=0.04) | 14.50 | 0.5970 | 9.7 |
 
 Pareto plot (Accuracy vs Cost):
-![Accuracy vs Cost Pareto](/Users/csuftitan/Desktop/Thesis/drift-aware-mlops/.worktrees/implementation/runs/pareto/accuracy_cost.svg)
+![Accuracy vs Cost Pareto](../runs/pareto/accuracy_cost.svg)
 
 ### Updated Policy Comparison (LinUCB norm+penalty+bonus)
 

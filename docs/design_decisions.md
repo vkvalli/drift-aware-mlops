@@ -589,3 +589,21 @@ Reporting
 We avoid formal multiple-hypothesis testing and instead interpret bootstrap intervals conservatively, focusing on consistent effects rather than marginal significance.
 
 Different datasets are used to validate different aspects of the proposed architecture: tabular datasets validate drift and replay behavior, text datasets stress retraining cost asymmetry, cluster traces evaluate cost-aware scheduling, and fairness datasets test subgroup-level trade-offs. No single dataset is expected to validate all system properties.
+
+## Multi-Modal Extension Defaults (2026-03-06)
+
+To support regression, text, and fairness evaluation with one pipeline, runtime configuration now carries:
+- `task`: `classification | regression | text_classification`
+- `target_column`: explicit target field for each dataset
+- `feature_mode`: `tabular | tfidf`
+- `perf_direction`: `higher_better | lower_better`
+- `protected_attr` (optional) for fairness diagnostics
+
+Metric alignment by task:
+- Electricity: `accuracy_pre` (classification baseline)
+- Airline and AG News: `f1_pre` (imbalanced classification robustness)
+- California Housing: `mae_pre`/`rmse_pre`/`r2_pre` with `lower_better` reward direction for error metrics
+
+Fairness phase scope is evaluation-only:
+- Log `dpd_pre` and `eod_pre` in `CostEvent`
+- No fairness penalty is added to the RL objective in this phase
