@@ -102,3 +102,107 @@ Recommendation
 Pick California Housing first (fastest to integrate), then if time allows add Ames for realism.
 
 
+
+
+## Chunk X.1 (2026-03-06T06:26:14.284818+00:00)
+
+### What Changed
+- docs/implementation-plan.md
+- tools/log_chunk_update.py
+- README.md
+
+### Why It Changed
+- Added tracked multi-modal phase to implementation plan
+- Added thesis-ready chunk logger CLI
+- Documented guardrail usage
+
+### What To Verify
+- rg -n 'Phase X: Multi-Modal Extension' docs/implementation-plan.md
+- python3 tools/log_chunk_update.py --help
+
+### Expected Output
+- Phase section present in implementation plan
+- CLI help lists required arguments
+
+### New Metrics
+- mae_pre
+- rmse_pre
+- r2_pre
+- dpd_pre
+- eod_pre
+
+### New Plots
+- artifacts/plots/fairness_tradeoff.svg
+
+### New Log Fields
+- task
+- target_column
+- perf_direction
+- protected_attr
+
+### Known Limitations
+- Regression/text/fairness integrations pending verification
+
+### Next Chunk
+- Complete multi-task trainer and matrix aggregation updates
+
+
+## Chunk X.2 (2026-03-06T06:31:39.496157+00:00)
+
+### What Changed
+- src/trainer/trainer.py
+- src/trainer/compat.py
+- src/monitor/monitor.py
+- src/runner/offline_run.py
+- tools/run_matrix.py
+- tools/build_rl_dataset.py
+- tools/aggregate_matrix.py
+- src/schemas/cost.py
+- tools/prepare_california_housing.py
+- tools/prepare_ag_news.py
+- tools/prepare_adult.py
+- tools/plot_fairness_tradeoff.py
+- tests/test_regression_trainer.py
+- tests/test_text_trainer.py
+- tests/test_fairness_metrics.py
+
+### Why It Changed
+- Generalized pipeline to multi-task runtime mode
+- Added regression metrics and lower-better reward support
+- Added text classification TF-IDF path
+- Added fairness diagnostics logging and reporting
+
+### What To Verify
+- python3 -m unittest
+- python3 -m unittest tests/test_regression_trainer.py tests/test_text_trainer.py tests/test_fairness_metrics.py
+- git branch --list thesis-review-build
+
+### Expected Output
+- All tests pass (with known skips)
+- New multi-task tests pass
+- thesis-review-build branch exists
+
+### New Metrics
+- mae_pre
+- rmse_pre
+- r2_pre
+- dpd_pre
+- eod_pre
+
+### New Plots
+- artifacts/plots/fairness_tradeoff.svg
+
+### New Log Fields
+- task
+- feature_mode
+- target_column
+- protected_attr
+- perf_direction
+- doc_len_mean
+- vocab_entropy_proxy
+
+### Known Limitations
+- Smoke runs for California Housing and AG News not executed in this environment
+
+### Next Chunk
+- Run modality-specific matrices and update experiments_summary tables
