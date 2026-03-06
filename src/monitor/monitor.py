@@ -206,10 +206,14 @@ def run_monitor(
                     text_stats[j][1] for j in range(max(0, i - ref_window), i)
                 ]
                 if ref_docs and ref_entropy:
-                    drift_core = abs(doc_len_mean - (sum(ref_docs) / len(ref_docs)))
-                    drift_max = abs(
+                    doc_diff = abs(doc_len_mean - (sum(ref_docs) / len(ref_docs)))
+                    ent_diff = abs(
                         vocab_entropy - (sum(ref_entropy) / len(ref_entropy))
                     )
+                    # For text batches, use both summary signals so drift_core is sensitive
+                    # even when average document length is stable.
+                    drift_core = (doc_diff + ent_diff) / 2.0
+                    drift_max = max(doc_diff, ent_diff)
                 else:
                     drift_core = 0.0
                     drift_max = 0.0

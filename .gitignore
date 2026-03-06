@@ -23,6 +23,9 @@ data/
 models/
 experiments/
 dashboards/
+artifacts/
+runs/
+.cache/
 !tests/data/
 !tests/data/sample.csv
 

@@ -206,3 +206,185 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### Next Chunk
 - Run modality-specific matrices and update experiments_summary tables
+
+
+## Chunk MILESTONE-A-2026-03-06 (2026-03-06T10:39:24.310474+00:00)
+
+### What Changed
+- tools/plot_run.py
+- runs/california_smoke_20260306_023033/events.jsonl
+- runs/california_smoke_20260306_023033/plots/drift_timeseries.png
+- runs/california_smoke_20260306_023033/plots/action_timeline.png
+- runs/california_smoke_20260306_023033/plots/cost_curve.png
+- runs/matrix_20260306_023101/summary.csv
+
+### Why It Changed
+- Unblocked regression plotting in headless run
+- Completed California Housing smoke + mini matrix acceptance checks
+
+### What To Verify
+- SCIKIT_LEARN_DATA=.cache/sklearn_data .venv/bin/python tools/prepare_california_housing.py --out data/california_housing.csv
+- .venv/bin/python -m src.runner.offline_run --csv data/california_housing.csv --task regression --label-column MedHouseVal --target-column MedHouseVal --perf-direction lower_better --dataset-id california_housing --window-size 200 --max-rows 40000 --label-delay-batches 2 --seed 111 --replay-output runs/california_smoke_20260306_023033/replay.jsonl --state-output runs/california_smoke_20260306_023033/state.jsonl --actions-output runs/california_smoke_20260306_023033/actions.jsonl --trainer-output runs/california_smoke_20260306_023033/trainer_output.jsonl --canonical-output runs/california_smoke_20260306_023033/events.jsonl --processed-index-file runs/california_smoke_20260306_023033/processed_actions.jsonl --dlq runs/california_smoke_20260306_023033/dlq.jsonl
+- .venv/bin/python tools/plot_run.py --events runs/california_smoke_20260306_023033/events.jsonl --outdir runs/california_smoke_20260306_023033/plots
+- .venv/bin/python tools/aggregate_matrix.py --matrix-dir runs/matrix_20260306_023101 --out runs/matrix_20260306_023101/summary.csv
+
+### Expected Output
+- Regression dataset CSV created
+- Smoke run emits cost/model_update events
+- Plot artifacts generated in run plots folder
+- Matrix summary contains mae_/rmse_ fields
+
+### New Metrics
+- mae_pre
+- rmse_pre
+- r2_pre
+
+### New Plots
+- drift_timeseries.png
+- action_timeline.png
+- cost_curve.png
+
+### New Log Fields
+- cost.mae_pre
+- cost.rmse_pre
+- cost.r2_pre
+
+### Known Limitations
+- California Housing prep requires one-time network access unless dataset already present
+
+### Next Chunk
+- Milestone B: AG News smoke and matrix
+
+
+## Chunk MILESTONE-B-2026-03-06 (2026-03-06T10:45:50.456999+00:00)
+
+### What Changed
+- src/monitor/monitor.py
+- tests/test_text_monitor_signals.py
+- runs/agnews_smoke_20260306_024442/events.jsonl
+- runs/agnews_smoke_20260306_024442/plots/drift_timeseries.png
+- runs/matrix_20260306_024457/summary.csv
+
+### Why It Changed
+- Fix degenerate text drift signal in monitor
+- Complete AG News smoke + mini matrix acceptance checks
+
+### What To Verify
+- .venv/bin/python -m unittest tests/test_text_monitor_signals.py tests/test_monitor.py
+- .venv/bin/python -m src.runner.offline_run --csv data/ag_news.csv --task text_classification --feature-mode tfidf --label-column class --dataset-id ag_news --window-size 200 --max-rows 40000 --label-delay-batches 2 --seed 111 --replay-output runs/agnews_smoke_20260306_024442/replay.jsonl --state-output runs/agnews_smoke_20260306_024442/state.jsonl --actions-output runs/agnews_smoke_20260306_024442/actions.jsonl --trainer-output runs/agnews_smoke_20260306_024442/trainer_output.jsonl --canonical-output runs/agnews_smoke_20260306_024442/events.jsonl --processed-index-file runs/agnews_smoke_20260306_024442/processed_actions.jsonl --dlq runs/agnews_smoke_20260306_024442/dlq.jsonl
+- .venv/bin/python tools/aggregate_matrix.py --matrix-dir runs/matrix_20260306_024457 --out runs/matrix_20260306_024457/summary.csv
+
+### Expected Output
+- Unit tests pass for text monitor drift
+- Smoke run produces non-constant drift_core after warmup
+- Matrix summary includes accuracy/f1 fields
+
+### New Metrics
+- drift_core(text)=avg(abs(doc_len_shift)
+- abs(entropy_shift))
+
+### New Plots
+- drift_timeseries.png
+- action_timeline.png
+- cost_curve.png
+
+### New Log Fields
+- state.doc_len_mean
+- state.vocab_entropy_proxy
+
+### Known Limitations
+- Text drift magnitude remains small on synthetic AG News generator
+
+### Next Chunk
+- Milestone C: Adult fairness smoke + tradeoff plot
+
+
+## Chunk MILESTONE-C-2026-03-06 (2026-03-06T10:47:35.878744+00:00)
+
+### What Changed
+- data/adult.csv
+- runs/adult_smoke_20260306_024613/events.jsonl
+- runs/matrix_20260306_024630/summary.csv
+- runs/matrix_20260306_024630/plots/fairness_tradeoff.png
+
+### Why It Changed
+- Validate Adult fairness evaluation path end-to-end
+- Generate fairness tradeoff artifact from matrix summary
+
+### What To Verify
+- .venv/bin/python tools/prepare_adult.py --out data/adult.csv --target-column income --rows 60000
+- .venv/bin/python -m src.runner.offline_run --csv data/adult.csv --task classification --label-column income --target-column income --protected-attr sex --dataset-id adult --window-size 200 --max-rows 40000 --label-delay-batches 2 --seed 111 --replay-output runs/adult_smoke_20260306_024613/replay.jsonl --state-output runs/adult_smoke_20260306_024613/state.jsonl --actions-output runs/adult_smoke_20260306_024613/actions.jsonl --trainer-output runs/adult_smoke_20260306_024613/trainer_output.jsonl --canonical-output runs/adult_smoke_20260306_024613/events.jsonl --processed-index-file runs/adult_smoke_20260306_024613/processed_actions.jsonl --dlq runs/adult_smoke_20260306_024613/dlq.jsonl
+- .venv/bin/python tools/aggregate_matrix.py --matrix-dir runs/matrix_20260306_024630 --out runs/matrix_20260306_024630/summary.csv
+- .venv/bin/python tools/plot_fairness_tradeoff.py --summary runs/matrix_20260306_024630/summary.csv --out runs/matrix_20260306_024630/plots/fairness_tradeoff.png
+
+### Expected Output
+- Adult dataset prepared
+- Smoke run emits fairness metrics in cost events
+- Matrix summary contains dpd/eod fields
+- Fairness tradeoff plot generated
+
+### New Metrics
+- dpd_pre
+- eod_pre
+- tp_pre
+- fp_pre
+- tn_pre
+- fn_pre
+
+### New Plots
+- fairness_tradeoff.png
+
+### New Log Fields
+- cost.dpd_pre
+- cost.eod_pre
+
+### Known Limitations
+- Adult preparation currently uses synthetic generator unless external input CSV is provided
+
+### Next Chunk
+- Milestone D: Update experiments_log modality subsections
+
+
+## Chunk MILESTONE-D-2026-03-06 (2026-03-06T10:49:02.357977+00:00)
+
+### What Changed
+- docs/experiments_log.md
+
+### Why It Changed
+- Add compact modality subsections with setup
+- metrics
+- policy rows
+- and plot links
+- Document fairness as minimal evaluation-only demo
+
+### What To Verify
+- rg -n 'Multi-Modal Smoke Validation|California Housing \(Regression\)|AG News \(Text Classification\)|Adult \(Fairness Evaluation Demo\)' docs/experiments_log.md
+- rg -n '^/|^[A-Za-z]:\\\\' docs/*.md
+
+### Expected Output
+- New modality sections present in experiments log
+- No absolute machine-specific paths in docs
+
+### New Metrics
+- MAE/RMSE (regression)
+- accuracy/F1 (text)
+- DPD/EOD (fairness)
+
+### New Plots
+- runs/california_smoke_20260306_023033/plots/drift_timeseries.png
+- runs/agnews_smoke_20260306_024442/plots/drift_timeseries.png
+- runs/matrix_20260306_024630/plots/fairness_tradeoff.png
+
+### New Log Fields
+- cost.mae_pre
+- cost.rmse_pre
+- cost.dpd_pre
+- cost.eod_pre
+- state.doc_len_mean
+- state.vocab_entropy_proxy
+
+### Known Limitations
+- Smoke tables are for pipeline verification; not all modalities are hyperparameter-tuned for final benchmark claims
+
+### Next Chunk
+- Milestone E/F: release notes and cleanup checks

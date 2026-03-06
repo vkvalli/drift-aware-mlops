@@ -589,3 +589,79 @@ For thesis construct validity, we explicitly separate performance scalars by tas
 - Airline uses `F1`/balanced accuracy due to class imbalance.
 
 This is treated as a measurement-validity choice, not outcome chasing: each dataset is evaluated with a metric aligned to its label distribution and operational objective.
+
+## Multi-Modal Smoke Validation (2026-03-06)
+
+This section records smoke + mini-matrix validation for the newly added task modes without changing core architecture.
+
+### California Housing (Regression)
+
+Setup:
+- dataset prep: `data/california_housing.csv`
+- task: `regression`
+- label/target: `MedHouseVal`
+- windowing: `window_size=200`, `max_rows=60000`, seeds `111,222,333`
+- primary metric: `MAE` (lower is better), with `RMSE` tracked
+
+Artifacts:
+- smoke run: `runs/california_smoke_20260306_023033/events.jsonl`
+- matrix summary: `runs/matrix_20260306_023101/summary.csv`
+- smoke plots: `runs/california_smoke_20260306_023033/plots/drift_timeseries.png`
+
+| Policy | Mean Fine-Tunes | Mean Cost (USD) | Mean MAE | Mean RMSE |
+| --- | --- | --- | --- | --- |
+| no_retrain | 0.00 | 0.00 | 2.0655 | 2.2112 |
+| fixed_interval | 10.00 | 15.00 | 2.9313e15 | 3.6740e15 |
+| threshold_persistence | 99.00 | 148.50 | 1.7570e15 | 2.2116e15 |
+
+Interpretation:
+- regression path is wired end-to-end (cost/model updates + MAE/RMSE logging + plots).
+- this run is a smoke validation, not a tuned regression benchmark; update policies are numerically unstable and need separate hyperparameter tuning before final comparison.
+
+### AG News (Text Classification)
+
+Setup:
+- dataset prep: `data/ag_news.csv` (synthetic 60k rows from `tools/prepare_ag_news.py`)
+- task: `text_classification` with `feature_mode=tfidf`
+- label: `class`
+- windowing: `window_size=200`, `max_rows=60000`, seeds `111,222,333`
+- primary metrics: `accuracy`, `F1`
+
+Artifacts:
+- smoke run: `runs/agnews_smoke_20260306_024442/events.jsonl`
+- matrix summary: `runs/matrix_20260306_024457/summary.csv`
+- smoke plots: `runs/agnews_smoke_20260306_024442/plots/drift_timeseries.png`
+
+| Policy | Mean Fine-Tunes | Mean Cost (USD) | Mean Accuracy | Mean F1 |
+| --- | --- | --- | --- | --- |
+| no_retrain | 0.00 | 0.00 | 0.2500 | 0.1000 |
+| fixed_interval | 30.00 | 45.00 | 0.9799 | 0.9758 |
+| threshold_persistence | 0.00 | 0.00 | 0.2500 | 0.1000 |
+
+Interpretation:
+- text path is wired end-to-end and no longer produces degenerate drift.
+- monitor patch now uses both document-length shift and entropy shift in text `drift_core`, yielding non-constant post-warmup drift.
+
+### Adult (Fairness Evaluation Demo)
+
+Setup:
+- dataset prep: `data/adult.csv` (synthetic 60k rows from `tools/prepare_adult.py`)
+- task: `classification`
+- label: `income`
+- protected attribute: `sex`
+- windowing: `window_size=200`, `max_rows=60000`, seeds `111,222,333`
+- primary metrics: `accuracy`, `F1`, fairness (`DPD`, `EOD`)
+
+Artifacts:
+- smoke run: `runs/adult_smoke_20260306_024613/events.jsonl`
+- matrix summary: `runs/matrix_20260306_024630/summary.csv`
+- fairness plot: `runs/matrix_20260306_024630/plots/fairness_tradeoff.png`
+
+| Policy | Mean Fine-Tunes | Mean Cost (USD) | Mean F1 | Mean DPD | Mean EOD |
+| --- | --- | --- | --- | --- | --- |
+| no_retrain | 0.00 | 0.00 | 0.0000 | 0.0000 | 0.0000 |
+| fixed_interval | 30.00 | 45.00 | 0.2441 | 0.0118 | 0.0222 |
+| threshold_persistence | 292.00 | 438.00 | 0.2609 | 0.0120 | 0.0215 |
+
+Fairness note (minimal demo scope):
+- fairness metrics are evaluation-only in this phase (`dpd_pre`, `eod_pre`) and are not yet part of the policy objective.

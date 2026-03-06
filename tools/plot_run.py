@@ -1,9 +1,18 @@
 import argparse
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Dict, List
 
 try:
+    if "MPLCONFIGDIR" not in os.environ:
+        mpl_dir = Path(tempfile.gettempdir()) / "matplotlib-cache"
+        mpl_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["MPLCONFIGDIR"] = str(mpl_dir)
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
     import matplotlib.pyplot as plt
 except Exception:  # pragma: no cover
     plt = None
@@ -37,14 +46,18 @@ def plot_run(events_path: Path, outdir: Path) -> None:
 
     state_by_id = {s.get("state_id"): s for s in states}
 
-    states_sorted = sorted(states, key=lambda e: _batch_index_from_id(e.get("batch_id", "b_000000")))
+    states_sorted = sorted(
+        states, key=lambda e: _batch_index_from_id(e.get("batch_id", "b_000000"))
+    )
     actions_sorted = sorted(
         actions,
         key=lambda e: _batch_index_from_id(
             state_by_id.get(e.get("state_id"), {}).get("batch_id", "b_000000")
         ),
     )
-    costs_sorted = sorted(costs, key=lambda e: _batch_index_from_id(e.get("action_id", "a_000000")))
+    costs_sorted = sorted(
+        costs, key=lambda e: _batch_index_from_id(e.get("action_id", "a_000000"))
+    )
 
     # Plot 1: Drift over time
     if plt is not None and states_sorted:
@@ -75,7 +88,10 @@ def plot_run(events_path: Path, outdir: Path) -> None:
             )
             for a in actions_sorted
         ]
-        colors = ["red" if a.get("action_type") == "fine_tune" else "blue" for a in actions_sorted]
+        colors = [
+            "red" if a.get("action_type") == "fine_tune" else "blue"
+            for a in actions_sorted
+        ]
 
         plt.figure(figsize=(8, 2))
         for xi, c in zip(x, colors):
@@ -111,7 +127,9 @@ def plot_run(events_path: Path, outdir: Path) -> None:
 
     # Run summary (stdlib-only)
     summary_path = outdir / "run_report.txt"
-    batch_count = len([e for e in events if e.get("event_type") in {"BatchEvent", "batch"}])
+    batch_count = len(
+        [e for e in events if e.get("event_type") in {"BatchEvent", "batch"}]
+    )
     state_count = len(states)
     action_count = len(actions)
     cost_count = len(costs)
@@ -122,7 +140,11 @@ def plot_run(events_path: Path, outdir: Path) -> None:
     cost_per_fine_tune = total_cost / fine_tune_count if fine_tune_count else 0.0
 
     max_batch = max(
-        [_batch_index_from_id(b.get("batch_id", "b_000000")) for b in events if b.get("event_type") in {"BatchEvent", "batch"}],
+        [
+            _batch_index_from_id(b.get("batch_id", "b_000000"))
+            for b in events
+            if b.get("event_type") in {"BatchEvent", "batch"}
+        ],
         default=0,
     )
     shift_batch = max_batch // 2 if max_batch else 0
@@ -161,7 +183,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _plot_accuracy_over_time(updates: List[Dict], actions_sorted: List[Dict], out_path: Path) -> None:
+def _plot_accuracy_over_time(
+    updates: List[Dict], actions_sorted: List[Dict], out_path: Path
+) -> None:
     points = []
     for idx, u in enumerate(updates):
         if not u.get("executed", False):
@@ -204,14 +228,18 @@ def _plot_accuracy_over_time(updates: List[Dict], actions_sorted: List[Dict], ou
             prev_xv, prev_yv = points[i - 1]
             px = margin + (prev_xv / max(max_x, 1)) * chart_w
             py = height - margin - ((prev_yv - min_y) / (max_y - min_y)) * chart_h
-            svg.append(f'<line x1="{px:.1f}" y1="{py:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="#59a14f"/>')
+            svg.append(
+                f'<line x1="{px:.1f}" y1="{py:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="#59a14f"/>'
+            )
 
     _save_svg(out_path, width, height, svg)
 
 
 def _save_svg(out_path: Path, width: int, height: int, lines: List[str]) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">']
+    svg = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">'
+    ]
     svg.extend(lines)
     svg.append("</svg>")
     out_path.write_text("\n".join(svg))
