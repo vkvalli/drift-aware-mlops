@@ -66,6 +66,11 @@ def _label_to_binary(
     raw = str(label_value).strip()
     if raw == "":
         return None
+    lowered = raw.lower()
+    if lowered in {"1", "1.0", "true", "yes"}:
+        return 1
+    if lowered in {"0", "0.0", "false", "no"}:
+        return 0
     if label_column.lower() == "arrdel15":
         try:
             return 1 if float(raw) >= 1.0 else 0
@@ -343,7 +348,7 @@ def _fairness_metrics(
 def _predict_metrics(
     model, X, y, task: str, groups: Optional[List[str]] = None
 ) -> Optional[Dict[str, float]]:
-    if X is None or len(X) == 0 or len(y) == 0:
+    if _row_count(X) == 0 or len(y) == 0:
         return None
     if model is None:
         if task == "regression":
@@ -438,6 +443,20 @@ def _feature_dim(X) -> Optional[int]:
         if isinstance(X[0], list):
             return len(X[0])
     return None
+
+
+def _row_count(X) -> int:
+    if X is None:
+        return 0
+    if hasattr(X, "shape"):
+        try:
+            return int(X.shape[0])
+        except Exception:
+            return 0
+    try:
+        return len(X)
+    except Exception:
+        return 0
 
 
 def _compatible_model_for_batch(model, X_batch, seed: Optional[int], task: str):
