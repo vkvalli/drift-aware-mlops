@@ -27,13 +27,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ks", type=str, default="1,3,5")
     parser.add_argument("--fixed-intervals", type=str, default="10")
     parser.add_argument("--cooldowns", type=str, default="0")
-    parser.add_argument("--policies", type=str, default="no_retrain,fixed_interval,threshold_persistence")
+    parser.add_argument(
+        "--policies",
+        type=str,
+        default="no_retrain,fixed_interval,threshold_persistence",
+    )
     parser.add_argument("--dataset-id", type=str, default="electricity")
+    parser.add_argument(
+        "--task",
+        choices=["classification", "regression", "text_classification"],
+        default="classification",
+    )
+    parser.add_argument(
+        "--feature-mode", choices=["tabular", "tfidf"], default="tabular"
+    )
     parser.add_argument("--model-version", type=str, default="m_000001")
     parser.add_argument("--label-column", type=str, default="class")
+    parser.add_argument("--target-column", type=str, default=None)
     parser.add_argument("--positive-label", type=str, default="UP")
+    parser.add_argument("--protected-attr", type=str, default=None)
+    parser.add_argument(
+        "--perf-direction", choices=["higher_better", "lower_better"], default=None
+    )
     parser.add_argument("--outdir", type=str, default="runs")
-    parser.add_argument("--linucb-model", type=str, default="artifacts/policies/linucb.pkl")
+    parser.add_argument(
+        "--linucb-model", type=str, default="artifacts/policies/linucb.pkl"
+    )
     parser.add_argument("--warm-start-n", type=int, default=30)
     parser.add_argument("--warm-start-k", type=int, default=6)
     parser.add_argument("--epsilon1", type=float, default=0.05)
@@ -68,24 +87,71 @@ def main() -> None:
                         for cooldown in cooldowns:
                             run_id = f"policy=threshold_persistence_T{threshold}_K{k}_cd{cooldown}_seed{seed}"
                             run_dir = outdir / run_id
-                            _run_single(args, run_dir, policy, seed, threshold, k, fixed_intervals[0], cooldown)
+                            _run_single(
+                                args,
+                                run_dir,
+                                policy,
+                                seed,
+                                threshold,
+                                k,
+                                fixed_intervals[0],
+                                cooldown,
+                            )
             elif policy == "fixed_interval":
                 for interval in fixed_intervals:
                     for cooldown in cooldowns:
-                        run_id = f"policy=fixed_interval_N{interval}_cd{cooldown}_seed{seed}"
+                        run_id = (
+                            f"policy=fixed_interval_N{interval}_cd{cooldown}_seed{seed}"
+                        )
                         run_dir = outdir / run_id
-                        _run_single(args, run_dir, policy, seed, thresholds[0], ks[0], interval, cooldown)
+                        _run_single(
+                            args,
+                            run_dir,
+                            policy,
+                            seed,
+                            thresholds[0],
+                            ks[0],
+                            interval,
+                            cooldown,
+                        )
             elif policy == "no_retrain":
                 run_id = f"policy=no_retrain_seed{seed}"
                 run_dir = outdir / run_id
-                _run_single(args, run_dir, policy, seed, thresholds[0], ks[0], fixed_intervals[0], cooldowns[0])
+                _run_single(
+                    args,
+                    run_dir,
+                    policy,
+                    seed,
+                    thresholds[0],
+                    ks[0],
+                    fixed_intervals[0],
+                    cooldowns[0],
+                )
             elif policy == "linucb":
                 run_id = f"policy=linucb_seed{seed}"
                 run_dir = outdir / run_id
-                _run_single(args, run_dir, policy, seed, thresholds[0], ks[0], fixed_intervals[0], cooldowns[0])
+                _run_single(
+                    args,
+                    run_dir,
+                    policy,
+                    seed,
+                    thresholds[0],
+                    ks[0],
+                    fixed_intervals[0],
+                    cooldowns[0],
+                )
 
 
-def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k: int, fixed_interval: int, cooldown: int) -> None:
+def _run_single(
+    args,
+    run_dir: Path,
+    policy: str,
+    seed: int,
+    threshold: float,
+    k: int,
+    fixed_interval: int,
+    cooldown: int,
+) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     import sys
@@ -132,10 +198,16 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
             str(seed),
             "--dataset-id",
             args.dataset_id,
+            "--task",
+            args.task,
+            "--feature-mode",
+            args.feature_mode,
             "--model-version",
             args.model_version,
             "--label-column",
             args.label_column,
+            "--target-column",
+            args.target_column or args.label_column,
             "--positive-label",
             args.positive_label,
             "--replay-output",
@@ -156,6 +228,10 @@ def _run_single(args, run_dir: Path, policy: str, seed: int, threshold: float, k
         ]
         if args.max_rows is not None:
             argv.extend(["--max-rows", str(args.max_rows)])
+        if args.protected_attr:
+            argv.extend(["--protected-attr", args.protected_attr])
+        if args.perf_direction:
+            argv.extend(["--perf-direction", args.perf_direction])
         if args.threshold_full is not None:
             argv.extend(["--threshold-full", str(args.threshold_full)])
         if args.enable_shadow_buffer:

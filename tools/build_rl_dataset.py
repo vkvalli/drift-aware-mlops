@@ -54,13 +54,16 @@ def build_dataset(
     defer_bonus: float,
     defer_threshold: float,
     perf_field: str,
+    perf_direction: str,
 ) -> None:
     events = _load_events(events_path)
 
     states = {e["state_id"]: e for e in events if e.get("event_type") == "state"}
     actions = [e for e in events if e.get("event_type") == "action"]
     costs = {e["action_id"]: e for e in events if e.get("event_type") == "cost"}
-    updates = {e["action_id"]: e for e in events if e.get("event_type") == "model_update"}
+    updates = {
+        e["action_id"]: e for e in events if e.get("event_type") == "model_update"
+    }
 
     rows: List[Dict] = []
     prev_perf = 0.0
@@ -75,16 +78,28 @@ def build_dataset(
         accuracy_pre = None
         balanced_accuracy_pre = None
         f1_pre = None
+        mae_pre = None
+        rmse_pre = None
+        r2_pre = None
         if cost:
             accuracy_pre = cost.get("accuracy_pre")
             balanced_accuracy_pre = cost.get("balanced_accuracy_pre")
             f1_pre = cost.get("f1_pre")
+            mae_pre = cost.get("mae_pre")
+            rmse_pre = cost.get("rmse_pre")
+            r2_pre = cost.get("r2_pre")
 
         perf_pre = None
         if perf_field == "f1_pre":
             perf_pre = f1_pre
         elif perf_field == "balanced_accuracy_pre":
             perf_pre = balanced_accuracy_pre
+        elif perf_field == "mae_pre":
+            perf_pre = mae_pre
+        elif perf_field == "rmse_pre":
+            perf_pre = rmse_pre
+        elif perf_field == "r2_pre":
+            perf_pre = r2_pre
         else:
             perf_pre = accuracy_pre
 
@@ -104,6 +119,8 @@ def build_dataset(
             delta_perf = _rolling_delta(perf_series, perf_window, t)
         else:
             delta_perf = perf_val - prev_perf
+        if perf_direction == "lower_better":
+            delta_perf = -delta_perf
         prev_perf = perf_val
 
         row = {
@@ -114,11 +131,18 @@ def build_dataset(
             "drift_core": _safe_float(state.get("drift_core") if state else 0.0),
             "drift_max": _safe_float(state.get("drift_max") if state else 0.0),
             "drift_ready": int(bool(state.get("drift_ready", False))) if state else 0,
-            "cooldown_active": int(bool(state.get("cooldown_active", False))) if state else 0,
+            "cooldown_active": (
+                int(bool(state.get("cooldown_active", False))) if state else 0
+            ),
             "action_type": action.get("action_type"),
             "accuracy_pre": accuracy_pre if accuracy_pre is not None else "",
-            "balanced_accuracy_pre": balanced_accuracy_pre if balanced_accuracy_pre is not None else "",
+            "balanced_accuracy_pre": (
+                balanced_accuracy_pre if balanced_accuracy_pre is not None else ""
+            ),
             "f1_pre": f1_pre if f1_pre is not None else "",
+            "mae_pre": mae_pre if mae_pre is not None else "",
+            "rmse_pre": rmse_pre if rmse_pre is not None else "",
+            "r2_pre": r2_pre if r2_pre is not None else "",
             "perf_pre": perf_pre if perf_pre is not None else "",
             "cost_usd": _safe_float(cost.get("estimated_usd") if cost else 0.0),
             "model_version": action.get("model_version", ""),
@@ -128,7 +152,7 @@ def build_dataset(
         rows.append(row)
         t += 1
 
-    if normalize_perf:
+    if normalize_perf and reward_mode != "shadow":
         perf_max = max(raw_perf_series) if raw_perf_series else 0.0
         if perf_max > 0:
             perf_series = [val / perf_max for val in perf_series]
@@ -138,8 +162,13 @@ def build_dataset(
                     delta_perf = _rolling_delta(perf_series, perf_window, idx)
                 else:
                     delta_perf = perf_series[idx] - prev_perf
+                if perf_direction == "lower_better":
+                    delta_perf = -delta_perf
                 prev_perf = perf_series[idx]
                 r["delta_perf"] = delta_perf
+    elif normalize_perf and reward_mode == "shadow":
+        # Shadow mode uses update-only delta_shadow; keep that signal unchanged.
+        pass
 
     c_max = max((r["cost_usd"] for r in rows), default=0.0)
     for r in rows:
@@ -174,6 +203,9 @@ def build_dataset(
         "accuracy_pre",
         "balanced_accuracy_pre",
         "f1_pre",
+        "mae_pre",
+        "rmse_pre",
+        "r2_pre",
         "perf_pre",
         "cost_usd",
         "cost_norm",
@@ -193,8 +225,14 @@ def build_dataset(
 def _print_stats(rows: List[Dict], c_max: float, perf_field: str) -> None:
     n = len(rows)
     fine_tune = sum(1 for r in rows if r.get("action_type") == "fine_tune")
-    acc_vals = [float(r["accuracy_pre"]) for r in rows if r.get("accuracy_pre") not in ("", None)]
-    perf_vals = [float(r["perf_pre"]) for r in rows if r.get("perf_pre") not in ("", None)]
+    acc_vals = [
+        float(r["accuracy_pre"])
+        for r in rows
+        if r.get("accuracy_pre") not in ("", None)
+    ]
+    perf_vals = [
+        float(r["perf_pre"]) for r in rows if r.get("perf_pre") not in ("", None)
+    ]
     delta_vals = [float(r["delta_perf"]) for r in rows]
     reward_vals = [float(r["reward"]) for r in rows]
 
@@ -221,11 +259,15 @@ def _print_stats(rows: List[Dict], c_max: float, perf_field: str) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Build RL dataset from canonical events")
+    parser = argparse.ArgumentParser(
+        description="Build RL dataset from canonical events"
+    )
     parser.add_argument("--events", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--w-cost", type=float, default=0.25)
-    parser.add_argument("--reward-mode", choices=["raw", "rolling", "shadow"], default="rolling")
+    parser.add_argument(
+        "--reward-mode", choices=["raw", "rolling", "shadow"], default="rolling"
+    )
     parser.add_argument("--perf-window", type=int, default=10)
     parser.add_argument("--w-drift", type=float, default=0.0)
     parser.add_argument("--drift-threshold", type=float, default=0.0)
@@ -235,8 +277,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--defer-threshold", type=float, default=0.0)
     parser.add_argument(
         "--perf-field",
-        choices=["accuracy_pre", "balanced_accuracy_pre", "f1_pre"],
+        choices=[
+            "accuracy_pre",
+            "balanced_accuracy_pre",
+            "f1_pre",
+            "mae_pre",
+            "rmse_pre",
+            "r2_pre",
+        ],
         default="accuracy_pre",
+    )
+    parser.add_argument(
+        "--perf-direction",
+        choices=["higher_better", "lower_better"],
+        default="higher_better",
     )
     return parser
 
@@ -257,6 +311,7 @@ def main() -> None:
         args.defer_bonus,
         args.defer_threshold,
         args.perf_field,
+        args.perf_direction,
     )
 
 

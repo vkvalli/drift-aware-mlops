@@ -47,6 +47,19 @@ python3 -m src.runner.offline_run \
 - `--clean-artifacts` clears prior outputs before run.
 - `--processed-index-file` stores processed action IDs for idempotent trainer re-runs.
 
+## Task Modes
+
+The offline runner supports multiple task types through shared event contracts:
+
+- `--task classification` (default tabular classification)
+- `--task regression` (logs `mae_pre`, `rmse_pre`, `r2_pre`)
+- `--task text_classification` with `--feature-mode tfidf`
+
+Useful task-related flags:
+- `--target-column` for explicit target field
+- `--feature-mode tabular|tfidf`
+- `--protected-attr` for fairness diagnostics (`dpd_pre`, `eod_pre`)
+
 ## Aggregate Run Reports
 
 After generating per-run reports, rebuild `runs/summary.txt`:
@@ -94,6 +107,31 @@ python3 tools/aggregate_matrix.py \
 Repro tips:
 - Seeds are deterministic and recorded in `run_meta`.
 - `events.jsonl` includes the run parameters for each run.
+
+## Thesis-Ready Chunk Changelog
+
+Use this after each implementation chunk to append a structured entry to `docs/research_log.md`:
+
+```bash
+python3 tools/log_chunk_update.py \
+  --chunk-id "X.Y" \
+  --files-changed "src/trainer/trainer.py,tools/build_rl_dataset.py" \
+  --why-changed "Added regression metrics support,Enabled lower-is-better reward direction" \
+  --verify-commands "python3 -m unittest tests/test_rl_dataset_regression.py,python3 tools/build_rl_dataset.py --help" \
+  --expected-output "Regression test passes,CLI shows mae_pre/rmse_pre perf fields" \
+  --new-metrics "mae_pre,rmse_pre,r2_pre" \
+  --new-plots "" \
+  --new-log-fields "task,target_column,perf_direction" \
+  --limitations "Smoke-only verification in local run" \
+  --next-chunk "Text classification support"
+```
+
+## Review Build Branch Workflow
+
+Stable review snapshots are tracked on `thesis-review-build`.
+
+- `main` can keep moving with active development.
+- `thesis-review-build` should receive only review-safe fixes and documentation polish.
 
 ## Registry Logger + Deterministic Replay (FileBus)
 

@@ -9,6 +9,7 @@
 **Tech Stack:** Python 3.11, Redis Streams, Docker Compose, Pydantic, pytest, ruff, black, GitHub Actions, pre-commit.
 
 **Changelog:** 2026-02-06 — Added CI/hooks, schema-first enforcement, structured logging, deterministic seeds, healthchecks, debug endpoints, and --max-rows subset mode.
+**Changelog:** 2026-03-06 — Added multi-modal extension phase (regression + text + fairness eval), thesis-ready chunk changelog guardrail, and thesis-review-build freeze workflow.
 
 ---
 
@@ -218,6 +219,123 @@ git commit -m "docs: add minimal README with architecture and schemas"
 ```python
 # tests/test_service_requirements.py
 from pathlib import Path
+
+```
+
+---
+
+### Phase X: Multi-Modal Extension + Thesis Guardrails
+
+#### Guardrail 1 — Thesis-Ready Chunk Changelog
+
+**Files:**
+- Create: `tools/log_chunk_update.py`
+- Modify: `docs/research_log.md`
+- Modify: `README.md`
+
+**Verify:**
+- `python3 tools/log_chunk_update.py --help`
+- Expected: required fields shown (`--chunk-id`, `--files-changed`, `--why-changed`, `--verify-commands`, `--expected-output`)
+
+**Commit template:**
+- `chore: add thesis-ready chunk changelog tooling`
+
+#### Guardrail 2 — Freeze Review Build Branch
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/implementation-plan.md`
+
+**Commands:**
+- `git checkout -b thesis-review-build`
+- `git push -u origin thesis-review-build`
+
+**Verify:**
+- `git branch --list thesis-review-build`
+- `git branch -r | rg thesis-review-build`
+- Expected: branch present locally and remotely
+
+**Commit template:**
+- `chore: add thesis review build branch workflow docs`
+
+#### Regression Support (California Housing)
+
+**Files:**
+- Modify: `src/trainer/compat.py`
+- Modify: `src/trainer/trainer.py`
+- Modify: `src/schemas/cost.py`
+- Modify: `src/runner/offline_run.py`
+- Modify: `tools/run_matrix.py`
+- Modify: `tools/build_rl_dataset.py`
+- Modify: `tools/aggregate_matrix.py`
+- Add: `tools/prepare_california_housing.py`
+- Add tests: `tests/test_regression_trainer.py`, `tests/test_rl_dataset_regression.py`
+
+**Interfaces:**
+- `--task {classification,regression,text_classification}`
+- `--target-column`
+- `--perf-direction {higher_better,lower_better}`
+- `--perf-field` supports `mae_pre`, `rmse_pre`, `r2_pre`
+
+**Verify:**
+- `python3 -m src.runner.offline_run ... --task regression --dataset-id california_housing ...`
+- `python3 tools/build_rl_dataset.py --events ... --perf-field mae_pre --perf-direction lower_better ...`
+- Expected: `events.jsonl` contains `mae_pre`; RL dataset has non-null `delta_perf` and `reward`
+
+**Commit template:**
+- `feat: add regression task support with MAE/RMSE reward direction`
+
+#### Text Support (AG News)
+
+**Files:**
+- Add: `tools/prepare_ag_news.py`
+- Modify: `src/trainer/compat.py`
+- Modify: `src/trainer/trainer.py`
+- Modify: `src/monitor/monitor.py`
+- Modify: `src/runner/offline_run.py`
+- Add tests: `tests/test_text_trainer.py`, `tests/test_text_monitor_signals.py`
+
+**Interfaces:**
+- `--task text_classification`
+- `--feature-mode tfidf` (default for text path)
+
+**Added state summaries:**
+- `doc_len_mean`
+- `vocab_entropy_proxy`
+
+**Verify:**
+- `python3 -m src.runner.offline_run ... --task text_classification --dataset-id ag_news ...`
+- `python3 tools/build_rl_dataset.py --events ... --perf-field f1_pre ...`
+- Expected: complete event chain and valid RL dataset
+
+**Commit template:**
+- `feat: add AG News text-classification path with TF-IDF + incremental updates`
+
+#### Fairness Evaluation Support (Adult, evaluation-only)
+
+**Files:**
+- Add: `tools/prepare_adult.py`
+- Modify: `src/schemas/cost.py`
+- Modify: `src/trainer/trainer.py`
+- Modify: `tools/aggregate_matrix.py`
+- Add: `tools/plot_fairness_tradeoff.py`
+- Add tests: `tests/test_fairness_metrics.py`, `tests/test_fairness_aggregation.py`
+
+**Interfaces:**
+- `--protected-attr sex` (optional)
+
+**Added metrics:**
+- `dpd_pre`
+- `eod_pre`
+
+**Verify:**
+- `python3 -m src.runner.offline_run ... --dataset-id adult --protected-attr sex ...`
+- `python3 tools/aggregate_matrix.py ...`
+- `python3 tools/plot_fairness_tradeoff.py ...`
+- Expected: fairness fields in `cost` events and summary output
+
+**Commit template:**
+- `feat: add fairness evaluation metrics (DPD/EOD) and reporting for Adult`
 
 
 def test_service_requirements_pinned():

@@ -47,10 +47,9 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
         mean = sum(values) / len(values)
         last = values[-1]
         minimum = min(values)
-        maximum = max(values)
         if len(values) > 1:
             variance = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
-            std = variance ** 0.5
+            std = variance**0.5
         else:
             std = None
         return len(values), mean, std, minimum, last
@@ -58,8 +57,15 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
     accuracies = _collect_float(cost, "accuracy_pre")
     balanced_accuracies = _collect_float(cost, "balanced_accuracy_pre")
     f1_values = _collect_float(cost, "f1_pre")
+    mae_values = _collect_float(cost, "mae_pre")
+    rmse_values = _collect_float(cost, "rmse_pre")
+    r2_values = _collect_float(cost, "r2_pre")
+    dpd_values = _collect_float(cost, "dpd_pre")
+    eod_values = _collect_float(cost, "eod_pre")
 
-    accuracy_count, accuracy_mean, accuracy_std, accuracy_min, accuracy_last = _series_stats(accuracies)
+    accuracy_count, accuracy_mean, accuracy_std, accuracy_min, accuracy_last = (
+        _series_stats(accuracies)
+    )
     (
         balanced_accuracy_count,
         balanced_accuracy_mean,
@@ -68,6 +74,11 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
         balanced_accuracy_last,
     ) = _series_stats(balanced_accuracies)
     f1_count, f1_mean, f1_std, f1_min, f1_last = _series_stats(f1_values)
+    mae_count, mae_mean, mae_std, mae_min, mae_last = _series_stats(mae_values)
+    rmse_count, rmse_mean, rmse_std, rmse_min, rmse_last = _series_stats(rmse_values)
+    r2_count, r2_mean, r2_std, r2_min, r2_last = _series_stats(r2_values)
+    dpd_count, dpd_mean, dpd_std, dpd_min, dpd_last = _series_stats(dpd_values)
+    eod_count, eod_mean, eod_std, eod_min, eod_last = _series_stats(eod_values)
 
     update_accuracies = []
     for u in updates:
@@ -81,7 +92,7 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
     if accuracy_count and accuracy_count > 1:
         mean = accuracy_mean or 0.0
         variance = sum((a - mean) ** 2 for a in accuracies) / (accuracy_count - 1)
-        accuracy_std = variance ** 0.5
+        accuracy_std = variance**0.5
 
     return {
         "batch_count": batch_count,
@@ -96,15 +107,56 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
         "accuracy_min": round(accuracy_min, 4) if accuracy_min is not None else "NA",
         "accuracy_last": round(accuracy_last, 4) if accuracy_last is not None else "NA",
         "balanced_accuracy_count": balanced_accuracy_count,
-        "balanced_accuracy_mean": round(balanced_accuracy_mean, 4) if balanced_accuracy_mean is not None else "NA",
-        "balanced_accuracy_std": round(balanced_accuracy_std, 4) if balanced_accuracy_std is not None else "NA",
-        "balanced_accuracy_min": round(balanced_accuracy_min, 4) if balanced_accuracy_min is not None else "NA",
-        "balanced_accuracy_last": round(balanced_accuracy_last, 4) if balanced_accuracy_last is not None else "NA",
+        "balanced_accuracy_mean": (
+            round(balanced_accuracy_mean, 4)
+            if balanced_accuracy_mean is not None
+            else "NA"
+        ),
+        "balanced_accuracy_std": (
+            round(balanced_accuracy_std, 4)
+            if balanced_accuracy_std is not None
+            else "NA"
+        ),
+        "balanced_accuracy_min": (
+            round(balanced_accuracy_min, 4)
+            if balanced_accuracy_min is not None
+            else "NA"
+        ),
+        "balanced_accuracy_last": (
+            round(balanced_accuracy_last, 4)
+            if balanced_accuracy_last is not None
+            else "NA"
+        ),
         "f1_count": f1_count,
         "f1_mean": round(f1_mean, 4) if f1_mean is not None else "NA",
         "f1_std": round(f1_std, 4) if f1_std is not None else "NA",
         "f1_min": round(f1_min, 4) if f1_min is not None else "NA",
         "f1_last": round(f1_last, 4) if f1_last is not None else "NA",
+        "mae_count": mae_count,
+        "mae_mean": round(mae_mean, 4) if mae_mean is not None else "NA",
+        "mae_std": round(mae_std, 4) if mae_std is not None else "NA",
+        "mae_min": round(mae_min, 4) if mae_min is not None else "NA",
+        "mae_last": round(mae_last, 4) if mae_last is not None else "NA",
+        "rmse_count": rmse_count,
+        "rmse_mean": round(rmse_mean, 4) if rmse_mean is not None else "NA",
+        "rmse_std": round(rmse_std, 4) if rmse_std is not None else "NA",
+        "rmse_min": round(rmse_min, 4) if rmse_min is not None else "NA",
+        "rmse_last": round(rmse_last, 4) if rmse_last is not None else "NA",
+        "r2_count": r2_count,
+        "r2_mean": round(r2_mean, 4) if r2_mean is not None else "NA",
+        "r2_std": round(r2_std, 4) if r2_std is not None else "NA",
+        "r2_min": round(r2_min, 4) if r2_min is not None else "NA",
+        "r2_last": round(r2_last, 4) if r2_last is not None else "NA",
+        "dpd_count": dpd_count,
+        "dpd_mean": round(dpd_mean, 4) if dpd_mean is not None else "NA",
+        "dpd_std": round(dpd_std, 4) if dpd_std is not None else "NA",
+        "dpd_min": round(dpd_min, 4) if dpd_min is not None else "NA",
+        "dpd_last": round(dpd_last, 4) if dpd_last is not None else "NA",
+        "eod_count": eod_count,
+        "eod_mean": round(eod_mean, 4) if eod_mean is not None else "NA",
+        "eod_std": round(eod_std, 4) if eod_std is not None else "NA",
+        "eod_min": round(eod_min, 4) if eod_min is not None else "NA",
+        "eod_last": round(eod_last, 4) if eod_last is not None else "NA",
         "update_accuracy_count": update_accuracy_count,
     }
 
@@ -131,6 +183,10 @@ def aggregate(matrix_dir: Path, out_path: Path) -> None:
             "ref_window": run_meta.get("ref_window"),
             "label_delay_batches": run_meta.get("label_delay_batches"),
             "max_rows": run_meta.get("max_rows"),
+            "task": run_meta.get("task"),
+            "feature_mode": run_meta.get("feature_mode"),
+            "target_column": run_meta.get("target_column"),
+            "protected_attr": run_meta.get("protected_attr"),
         }
         row.update(metrics)
         rows.append(row)
@@ -148,6 +204,10 @@ def aggregate(matrix_dir: Path, out_path: Path) -> None:
         "ref_window",
         "label_delay_batches",
         "max_rows",
+        "task",
+        "feature_mode",
+        "target_column",
+        "protected_attr",
         "batch_count",
         "action_count",
         "fine_tune_count",
@@ -169,6 +229,31 @@ def aggregate(matrix_dir: Path, out_path: Path) -> None:
         "f1_std",
         "f1_min",
         "f1_last",
+        "mae_count",
+        "mae_mean",
+        "mae_std",
+        "mae_min",
+        "mae_last",
+        "rmse_count",
+        "rmse_mean",
+        "rmse_std",
+        "rmse_min",
+        "rmse_last",
+        "r2_count",
+        "r2_mean",
+        "r2_std",
+        "r2_min",
+        "r2_last",
+        "dpd_count",
+        "dpd_mean",
+        "dpd_std",
+        "dpd_min",
+        "dpd_last",
+        "eod_count",
+        "eod_mean",
+        "eod_std",
+        "eod_min",
+        "eod_last",
         "update_accuracy_count",
     ]
     with out_path.open("w", newline="", encoding="utf-8") as f:
@@ -179,7 +264,9 @@ def aggregate(matrix_dir: Path, out_path: Path) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Aggregate matrix runs into summary.csv")
+    parser = argparse.ArgumentParser(
+        description="Aggregate matrix runs into summary.csv"
+    )
     parser.add_argument("--matrix-dir", required=True)
     parser.add_argument("--out", required=True)
     return parser

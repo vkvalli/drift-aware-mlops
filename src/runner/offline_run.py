@@ -18,7 +18,9 @@ def _batch_id_from_zero_index(idx: int) -> str:
     return f"b_{idx + 1:06d}"
 
 
-def _select_shadow_batch_ids(num_batches: int, seed: int, shadow_batches: int) -> List[str]:
+def _select_shadow_batch_ids(
+    num_batches: int, seed: int, shadow_batches: int
+) -> List[str]:
     if shadow_batches <= 0 or num_batches <= 1:
         return []
     early_end = min(num_batches - 1, max(6, int(0.2 * num_batches)))
@@ -34,7 +36,9 @@ def _select_shadow_batch_ids(num_batches: int, seed: int, shadow_batches: int) -
     return [_batch_id_from_zero_index(i) for i in picked]
 
 
-def _label_distribution(csv_path: Path, label_column: str, max_rows: Optional[int]) -> dict:
+def _label_distribution(
+    csv_path: Path, label_column: str, max_rows: Optional[int]
+) -> dict:
     counts = {"0": 0, "1": 0, "other": 0}
     total = 0
     try:
@@ -78,7 +82,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--policy", type=str, default="threshold_persistence")
     parser.add_argument("--fixed-interval", type=int, default=10)
     parser.add_argument("--cooldown", type=int, default=0)
-    parser.add_argument("--linucb-model", type=str, default="artifacts/policies/linucb.pkl")
+    parser.add_argument(
+        "--linucb-model", type=str, default="artifacts/policies/linucb.pkl"
+    )
     parser.add_argument("--warm-start-n", type=int, default=30)
     parser.add_argument("--warm-start-k", type=int, default=6)
     parser.add_argument("--epsilon1", type=float, default=0.05)
@@ -86,15 +92,34 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epsilon2", type=float, default=0.01)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--dataset-id", type=str, default="electricity")
+    parser.add_argument(
+        "--task",
+        choices=["classification", "regression", "text_classification"],
+        default="classification",
+    )
+    parser.add_argument(
+        "--feature-mode", choices=["tabular", "tfidf"], default="tabular"
+    )
     parser.add_argument("--model-version", type=str, default="m_000001")
     parser.add_argument("--label-column", type=str, default="class")
+    parser.add_argument("--target-column", type=str, default=None)
     parser.add_argument("--positive-label", type=str, default="UP")
+    parser.add_argument("--protected-attr", type=str, default=None)
+    parser.add_argument(
+        "--perf-direction", choices=["higher_better", "lower_better"], default=None
+    )
     parser.add_argument("--replay-output", type=str, default="artifacts/replay.jsonl")
     parser.add_argument("--state-output", type=str, default="artifacts/state.jsonl")
     parser.add_argument("--actions-output", type=str, default="artifacts/actions.jsonl")
-    parser.add_argument("--trainer-output", type=str, default="artifacts/trainer_output.jsonl")
-    parser.add_argument("--canonical-output", type=str, default="artifacts/events.jsonl")
-    parser.add_argument("--processed-index-file", type=str, default="artifacts/processed_actions.jsonl")
+    parser.add_argument(
+        "--trainer-output", type=str, default="artifacts/trainer_output.jsonl"
+    )
+    parser.add_argument(
+        "--canonical-output", type=str, default="artifacts/events.jsonl"
+    )
+    parser.add_argument(
+        "--processed-index-file", type=str, default="artifacts/processed_actions.jsonl"
+    )
     parser.add_argument("--dlq", type=str, default="artifacts/dlq.jsonl")
     parser.add_argument("--enable-shadow-buffer", action="store_true")
     parser.add_argument("--shadow-batches", type=int, default=2)
@@ -169,6 +194,8 @@ def main() -> None:
     run_meta = {
         "event_type": "run_meta",
         "dataset_id": args.dataset_id,
+        "task": args.task,
+        "feature_mode": args.feature_mode,
         "window_size": args.window_size,
         "max_rows": args.max_rows,
         "label_delay_batches": args.label_delay_batches,
@@ -180,8 +207,13 @@ def main() -> None:
         "fixed_interval": args.fixed_interval,
         "cooldown": args.cooldown,
         "label_column": args.label_column,
+        "target_column": args.target_column,
+        "protected_attr": args.protected_attr,
         "positive_label": args.positive_label,
-        "label_distribution": _label_distribution(csv_path, args.label_column, args.max_rows),
+        "perf_direction": args.perf_direction,
+        "label_distribution": _label_distribution(
+            csv_path, args.label_column, args.max_rows
+        ),
         "shadow_batch_ids": shadow_batch_ids,
         "seed": args.seed,
         "git_commit": git_commit,
@@ -198,6 +230,10 @@ def main() -> None:
         output_path=state_output,
         window_size=args.window_size,
         ref_window=args.ref_window,
+        task=args.task,
+        label_column=args.label_column,
+        target_column=args.target_column or args.label_column,
+        protected_attr=args.protected_attr or "",
         dlq_path=dlq_path,
     )
     append_file_to_canonical(state_output, canonical_output)
@@ -232,10 +268,14 @@ def main() -> None:
         states_path=state_output,
         csv_path=csv_path,
         label_column=args.label_column,
+        target_column=args.target_column or args.label_column,
         positive_label=args.positive_label,
         window_size=args.window_size,
         shadow_batch_ids=shadow_batch_ids,
         retrain_window_batches=args.retrain_window_batches,
+        task=args.task,
+        feature_mode=args.feature_mode,
+        protected_attr=args.protected_attr,
     )
     append_file_to_canonical(trainer_output, canonical_output)
 
