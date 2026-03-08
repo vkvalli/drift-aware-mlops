@@ -97,7 +97,10 @@ def _parse_label(
             val = int(float(value))
             return float(val - 1) if val > 0 else float(val)
         except ValueError:
-            return float(abs(hash(value)) % 32)
+            raise ValueError(
+                f"Non-numeric label '{value}' for text_classification in column '{label_column}'. "
+                "Expected numeric class IDs (e.g., 1..N)."
+            )
     return float(_label_to_binary(str(raw), label_column, positive_label) or 0)
 
 
@@ -144,9 +147,12 @@ def _load_csv_rows(
 
     with csv_path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        for row_idx, row in enumerate(reader, start=2):
             label = row.get(target_col)
-            y_val = _parse_label(label, task, target_col, positive_label)
+            try:
+                y_val = _parse_label(label, task, target_col, positive_label)
+            except ValueError as exc:
+                raise ValueError(f"{csv_path}:{row_idx}: {exc}") from exc
             if y_val is None:
                 continue
 
