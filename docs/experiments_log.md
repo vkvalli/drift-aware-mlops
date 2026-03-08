@@ -623,6 +623,7 @@ Interpretation:
 Setup:
 - dataset prep: `data/ag_news.csv` (synthetic 60k rows from `tools/prepare_ag_news.py`)
 - task: `text_classification` with `feature_mode=tfidf`
+- embedding scope: TF-IDF only in this phase (SBERT not implemented)
 - label: `class`
 - windowing: `window_size=200`, `max_rows=60000`, seeds `111,222,333`
 - primary metrics: `accuracy`, `F1`
@@ -665,3 +666,4 @@ Artifacts:
 
 Fairness note (minimal demo scope):
 - fairness metrics are evaluation-only in this phase (`dpd_pre`, `eod_pre`) and are not yet part of the policy objective.
+- fairness diagnostics here are scoped to binary classification behavior (Adult `income` target) and are not claimed as a multiclass/regression fairness framework.

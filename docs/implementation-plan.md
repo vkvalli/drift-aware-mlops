@@ -10,6 +10,7 @@
 
 **Changelog:** 2026-02-06 — Added CI/hooks, schema-first enforcement, structured logging, deterministic seeds, healthchecks, debug endpoints, and --max-rows subset mode.
 **Changelog:** 2026-03-06 — Added multi-modal extension phase (regression + text + fairness eval), thesis-ready chunk changelog guardrail, and thesis-review-build freeze workflow.
+**Changelog:** 2026-03-07 — Clarified implementation scope: AG News text path is TF-IDF-only (no SBERT yet), and Adult fairness diagnostics are binary-classification scoped.
 
 ---
 
@@ -298,6 +299,7 @@ from pathlib import Path
 **Interfaces:**
 - `--task text_classification`
 - `--feature-mode tfidf` (default for text path)
+- SBERT embedding mode is explicitly out of scope for this phase
 
 **Added state summaries:**
 - `doc_len_mean`
@@ -327,6 +329,9 @@ from pathlib import Path
 **Added metrics:**
 - `dpd_pre`
 - `eod_pre`
+
+**Scope note:**
+- Fairness diagnostics in this phase are scoped to binary classification runs (Adult demo), not multiclass/regression fairness.
 
 **Verify:**
 - `python3 -m src.runner.offline_run ... --dataset-id adult --protected-attr sex ...`

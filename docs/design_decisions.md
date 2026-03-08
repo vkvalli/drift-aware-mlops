@@ -599,6 +599,11 @@ To support regression, text, and fairness evaluation with one pipeline, runtime 
 - `perf_direction`: `higher_better | lower_better`
 - `protected_attr` (optional) for fairness diagnostics
 
+Implementation scope clarifications:
+- Text path currently supports TF-IDF features only (`feature_mode=tfidf`).
+- SBERT embeddings are not implemented in this phase.
+- Fairness diagnostics (`dpd_pre`, `eod_pre`) are scoped to binary classification runs (Adult demo); they are not treated as general multiclass/regression fairness metrics in this phase.
+
 Metric alignment by task:
 - Electricity: `accuracy_pre` (classification baseline)
 - Airline and AG News: `f1_pre` (imbalanced classification robustness)

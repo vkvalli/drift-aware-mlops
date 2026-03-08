@@ -8,6 +8,7 @@ For full chronological history, intermediate runs, and superseded tables, see `d
 - Datasets:
   - Electricity (`accuracy`-oriented)
   - Airline (`F1`/balanced-accuracy oriented due to class imbalance)
+  - AG News text path uses TF-IDF features in this phase (no SBERT mode yet)
 - Baselines:
   - `no_retrain`
   - `fixed_interval`
@@ -86,7 +87,7 @@ Conclusion: both datasets remained stable across label-delay stress under conser
   - Delayed-label stress summary
 - Active extension phase (in progress):
   - Multi-modal generalization (`classification`, `regression`, `text_classification`)
-  - Evaluation-only fairness diagnostics (`dpd_pre`, `eod_pre`)
+  - Evaluation-only fairness diagnostics (`dpd_pre`, `eod_pre`) scoped to binary classification runs (Adult demo)
 - Superseded:
   - early electricity calibration tables
   - early LinUCB low-coverage runs before the `update_count >= 8` gate was satisfied

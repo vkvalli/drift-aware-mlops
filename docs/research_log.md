@@ -456,3 +456,21 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### Next Chunk
 - Milestones complete
+
+
+## Chunk DOC-SCOPE-CLARIFICATIONS-2026-03-07 (2026-03-07T00:00:00-08:00)
+
+### What Changed
+- docs/design_decisions.md
+- docs/experiments_log.md
+- docs/experiments_summary.md
+- docs/implementation-plan.md
+
+### Why It Changed
+- Clarify actual implemented text feature path for AG News.
+- Clarify fairness-scope claims for Adult demo to avoid overstatement.
+
+### Scope Clarifications Logged
+- AG News text path currently uses TF-IDF (`feature_mode=tfidf`) only.
+- SBERT embeddings are not implemented in this phase.
+- Fairness diagnostics (`dpd_pre`, `eod_pre`) are evaluation-only and scoped to binary classification behavior (Adult demo).
