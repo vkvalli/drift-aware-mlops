@@ -17,7 +17,7 @@ think about adding:
 
 Architecture (MVP, Compose-first)
 
-We’ll implement a minimal event-driven MLOps pipeline using Docker Compose and Redis Streams to coordinate five services: ingestion/replay, monitor, policy-agent, trainer/updater, and registry+logger. Each service owns a single responsibility and communicates only via immutable events, enforcing a clean separation between signals, decisions, and outcomes—critical for delayed labels and multi-objective retraining decisions. The Ingestion service reads time-ordered dataset slices and emits batch events (including timestamps, window IDs, and label-availability flags). Monitor consumes batch events, computes drift/performance signals and fairness-related signals when labels are available (or proxy group-shift signals when labels are delayed), and emits state events containing the policy state vector. Policy-Agent consumes state events and emits action events (e.g., defer, fine_tune, partial_retrain, full_retrain), subject to system constraints such as cooldown windows. Trainer consumes action events, runs the requested update routine, and emits model_update and cost events (training time, estimated $ cost, energy/CO₂, and latency impact). Registry+Logger subscribes to all event streams and writes an append-only log for reproducibility, deterministic replay, and post-hoc reward computation. Deterministic replay is supported via Redis Streams IDs, checkpointed consumer offsets, and explicit model_version fields carried through events to preserve causal attribution.
+Current implementation is offline-first and uses FileBus/JSONL between services: ingestion/replay, monitor, policy-agent, trainer/updater, and registry+logger. Each service owns a single responsibility and communicates only via immutable events, enforcing separation between signals, decisions, and outcomes. The Ingestion service reads time-ordered dataset slices and emits batch events (including timestamps, window IDs, and label-availability flags). Monitor consumes batch events, computes drift/performance/fairness signals, and emits state events. Policy-Agent consumes state events and emits action events (e.g., defer, fine_tune, full_retrain). Trainer consumes action events, runs the requested update routine, and emits model_update and cost events. Registry+Logger consolidates append-only canonical logs for reproducibility and replay. Redis Streams topology remains the deployment target and is documented below as the stream-ready architecture.
 
 MVP Monitor (Offline, File-Based)
 
@@ -89,7 +89,7 @@ Reward Function (RL MVP)
 
 We use a causal, shaped reward to avoid “reward for acting” failure modes. For fine_tune, reward is based on marginal improvement (Δaccuracy) minus normalized cost (and optional energy), with an optional stability penalty for thrashing. For defer, reward is zero by default unless per-batch accuracy decline can be measured, in which case a small missed-opportunity penalty is used. We log pre-update accuracy for every action (including defer) so rewards can be computed consistently offline. This follows RL best practices: dense rewards, minimal shaping, and explicit cost terms to prevent reward hacking and policy collapse.
 
-Streams (Redis Streams)
+Target Streams Topology (Redis Deployment Path, Not Active in Offline Runs)
 - stream:batch (from ingestion)
 - stream:state (from monitor)
 - stream:action (from policy-agent)
@@ -118,83 +118,17 @@ batch
 - schema_version
 
 state
-- state_id, batch_id, window_id
-- drift_metrics (KS/PSI/MMD)
-- perf_metrics (ground-truth when labels available; proxy metrics otherwise)
-- fairness_metrics when label_available=true else fairness_proxy
-- label_delay (explicit delay metadata)
-- budget_status (explicit budget and cooldown metadata)
-- model_version, schema_version
+- state_id, batch_id, window_id, timestamp
+- model_version, label_available
+- drift_core, drift_max, drift_ready
+- perf_core, fairness_core
+- schema_version
 
-budget_status example
-```python
-{
-  "remaining_usd": 157.50,
-  "spent_this_window_usd": 12.30,
-  "cooldown_active": false,
-  "cooldown_expires_at": null
-}
-```
-
-perf_metrics example
-```python
-# When label_available=true
-{
-  "mode": "ground_truth",
-  "accuracy": 0.89,
-  "f1": 0.87,
-  "calibration_error": 0.04
-}
-
-# When label_available=false
-{
-  "mode": "proxy",
-  "predicted_confidence_mean": 0.82,
-  "predicted_entropy": 0.45,
-  "model_uncertainty": 0.12
-}
-```
-
-fairness_metrics / fairness_proxy example
-```python
-# When label_available=true
-{
-  "mode": "ground_truth",
-  "dpd": 0.08,
-  "eod": 0.12,
-  "subgroup_accuracy": {
-    "group_A": 0.92,
-    "group_B": 0.85
-  }
-}
-
-# When label_available=false
-{
-  "mode": "proxy",
-  "group_covariate_shift": {
-    "group_A": 0.03,
-    "group_B": 0.15
-  },
-  "predicted_label_dist": {
-    "group_A": {"pos": 0.6, "neg": 0.4},
-    "group_B": {"pos": 0.4, "neg": 0.6}
-  }
-}
-```
-
-label_delay example
-```python
-{
-  "expected_delay_sec": 3600,
-  "time_since_batch_sec": 1200,
-  "labels_pending": true
-}
-```
+Optional extensions (not part of locked schema) can be carried in additional fields for ablations, but the thesis baseline keeps the state contract compact and stable.
 
 action
 - action_id, state_id
-- action_type = defer | fine_tune | partial_retrain | full_retrain
-- cooldown_expires_at
+- action_type = defer | fine_tune | full_retrain
 - model_version, schema_version
 
 model_update
@@ -206,8 +140,7 @@ model_update
 cost
 - action_id, train_time_s, estimated_$
 - kwh, co2_kg, latency_impact_ms
-- effective_action_type (optional)
-- executed_as_requested (optional, bool)
+- executed (bool)
 - reason_code (optional)
 - schema_version
 
@@ -220,7 +153,7 @@ label (optional / future)
 Validation + Idempotency
 - Each consumer validates event schema before processing.
 - Idempotency keys: batch_id, state_id, action_id.
-- Registry+Logger writes a canonical log of all events; replay is driven by stream IDs + consumer offsets.
+- Registry+Logger writes a canonical log of all events; replay is driven by file offsets in offline mode (and stream IDs + consumer offsets in Redis mode).
 
 Observability Hooks
 - Monitor and Trainer export Prometheus metrics per event type (processing latency, error rate, action distribution).
@@ -231,11 +164,12 @@ Model Versioning Contract
 
 Error Handling & Resilience (Bus/Schema Guarantees Only)
 
-- Delivery semantics: at-least-once via Redis Streams consumer groups; consumers must be idempotent using action_id/state_id/batch_id keys.
-- Poison message handling: invalid schema or non-parseable payloads are routed to a dead-letter stream (stream:dlq) with error metadata for inspection.
+- Delivery semantics: at-least-once in Redis mode (consumer groups) and append-only ordered delivery in offline FileBus mode; consumers are idempotent using action_id/state_id/batch_id keys.
+- Poison message handling: invalid schema or non-parseable payloads are routed to DLQ (JSONL in offline mode, `stream:dlq` in Redis mode) with error metadata.
 - Backpressure control: consumers track lag; if lag exceeds thresholds, policy-agent emits defer actions and trainer pauses new work.
 - Schema validation: every consumer validates payloads against schema_versioned readers before processing; invalid versions are rejected to DLQ.
-- Replay safety: deterministic replay uses stream IDs + stored consumer offsets; side effects (training, deployment) are disabled unless replay mode is explicitly enabled.
+- Replay safety: deterministic replay uses file order + stored offsets in offline mode (or stream IDs + consumer offsets in Redis mode); side effects are disabled unless replay mode is explicitly enabled.
+- Current offline mode: append-only JSONL delivery via FileBus with idempotency keys and deterministic file-order replay.
 
 State Vector Contract (Locked Core + Extensible Extras)
 
@@ -245,21 +179,18 @@ Fixed core fields (always present)
 
 Identifiers / timing
 - state_id, batch_id, window_id
-- decision_timestamp
+- timestamp
 - model_version
 
 Availability flags
 - label_available
-- state_mode = ground_truth | proxy
+- drift_ready
 
 Core signals (compact, numeric-first)
-- drift_core (1–3 numbers max; e.g., PSI_mean, PSI_max, or MMD)
-- perf_core (if labels: accuracy/F1; else: confidence/entropy)
-- fairness_core (if labels: DPD/EOD; else: group_shift_max)
-
-Constraints
-- budget_status (remaining, cooldown flags)
-- label_delay (pending + time since batch)
+- drift_core
+- drift_max
+- perf_core
+- fairness_core
 
 Extensible extras (optional, namespaced)
 - extras.drift (full per-feature drift, multiple metrics)
@@ -277,17 +208,19 @@ Actions are emitted by the Policy-Agent and consumed by the Trainer. Each action
 Action Types
 - defer: no training is executed; monitoring continues.
 - fine_tune: update existing model weights on recent data; no architecture changes.
-- partial_retrain: retrain a subset of the model (e.g., last layers, LoRA adapters).
 - full_retrain: train from scratch or from a baseline checkpoint on full training window.
 
 Required Fields (in action event)
 - action_id, state_id
 - action_type
-- cooldown_expires_at
+- timestamp
 - model_version
+- reason
+- action_params
+- requested_at
 - schema_version
 
-Execution reporting: Trainer records effective_action_type and executed_as_requested in the emitted cost (or model_update) metadata when the requested action cannot be executed (e.g., insufficient window, cooldown active), along with a reason_code.
+Execution reporting: Trainer records `executed` and `reason_code` in cost events when the requested action cannot be executed as planned (e.g., insufficient window, cooldown active).
 
 Defer accounting: defer emits a cost event to preserve a complete per-decision trace (training costs set to zero in MVP).
 
@@ -408,7 +341,7 @@ End-to-end event chain: batch -> state -> action -> model_update + cost.
 
 Delayed labels: emit label events later; verify reward computation uses ground-truth when available.
 
-Replay determinism: re-run with same stream IDs and offsets; verify identical action sequences and effective_action_type (metric values may differ within numerical tolerance).
+Replay determinism: re-run with same stream IDs and offsets; verify identical action sequences and stable `executed`/`reason_code` semantics (metric values may differ within numerical tolerance).
 
 E2E Scenario Tests
 
@@ -418,7 +351,7 @@ Drift spike: expect fine_tune or retrain depending on constraints.
 
 Fairness shock: fairness_core degrades; expect action shift under same budget.
 
-Cooldown active: verify effective_action_type reflects deferral with reason_code.
+Cooldown active: verify action outcome is reflected by `executed` and `reason_code`.
 
 Missing fairness signal: verify policy degrades gracefully using performance-only signals.
 
@@ -432,12 +365,12 @@ Acceptance Criteria
 
 Schema conformance: 100% events valid in normal runs.
 
-Determinism: replay matches original action sequence and effective_action_type.
+Determinism: replay matches original action sequence and action outcome semantics (`executed`, `reason_code`).
 
 Drift sensitivity: detect seeded shifts with expected metric deltas.
 
-Deployment Flow (Compose-first, MVP)
-Goal: run a deterministic, event-driven loop locally with minimal operational overhead while preserving production-like separation of concerns.
+Deployment Flow (Target Redis/Compose Path)
+Goal: run the same event contracts on Redis Streams in a stream-native deployment path after offline validation.
 
 Services (docker-compose)
 
@@ -471,7 +404,7 @@ trainer
 
 prometheus + grafana
 
-Deployment Steps (local)
+Deployment Steps (local, Redis path)
 
 docker-compose up redis registry-logger
 
@@ -483,7 +416,7 @@ Runtime Controls
 
 Replay mode toggle (environment variable) disables side effects (training/deploy) while still writing events.
 
-Cooldown enforcement is handled by policy-agent + trainer using cooldown_expires_at.
+Cooldown enforcement is handled by policy-agent + trainer via configured cooldown windows and action parameters.
 
 Model artifacts are written to a versioned registry path; model_version is emitted with every event for traceability.
 
@@ -501,7 +434,7 @@ Kubernetes orchestration and horizontal scaling are explicitly out of scope for 
 
 Evaluation Protocol — Scope & Experimental Conditions
 
-The evaluation uses offline replay as the primary protocol, with a synthetic online simulation appendix to stress behaviors under bursty drift and varied label delay distributions. Offline replay treats the event log as the source of truth: we re-emit batch and label events in timestamp order, ensuring deterministic processing via Redis Stream IDs and checkpointed consumer offsets. The policy sees only the state vector core fields and never observes rewards at decision time, preserving delayed feedback constraints. Each experiment is run for multiple random seeds (policy initialization and stochastic components where applicable) and fixed budgets to isolate policy effects from resource variance. For comparability, all variants share identical data windows, label delay patterns, and cost/energy models; the only difference is the decision policy (threshold baselines vs learned policy). We report the objective vector per decision and aggregate across time windows.
+The evaluation uses offline replay as the primary protocol, with a synthetic online simulation appendix to stress behaviors under bursty drift and varied label delay distributions. Offline replay treats the canonical JSONL log as the source of truth: we re-emit batch and label events in file order with checkpointed offsets for deterministic processing. The policy sees only the state vector core fields and never observes rewards at decision time, preserving delayed feedback constraints. Each experiment is run for multiple random seeds (policy initialization and stochastic components where applicable) and fixed budgets to isolate policy effects from resource variance. For comparability, all variants share identical data windows, label delay patterns, and cost/energy models; the only difference is the decision policy (threshold baselines vs learned policy). We report the objective vector per decision and aggregate across time windows.
 
 Datasets and modalities follow the existing benchmark set (tabular, text, image), plus fairness-sensitive variants where labels are available for subgroup metrics. Drift is introduced either through the natural dataset chronology (offline) or through controlled replay perturbations (e.g., injected covariate shift spikes, subgroup distribution shifts, and delayed label arrivals) in the appendix.
 

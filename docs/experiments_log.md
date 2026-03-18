@@ -3,6 +3,8 @@
 > Supersession note: early calibration tables in this log are historical records.  
 > Final thesis-facing policy comparisons are maintained in `docs/experiments_summary.md`.
 > Superseded by: `docs/experiments_summary.md` final comparison tables.
+> Data validity scope: historical matrix fragments and aborted runs are kept for chronology only and excluded from final claims. In particular, incomplete runs `runs/matrix_20260301_032823` and `runs/matrix_20260301_035039` are non-final.
+> Repro alignment note (2026-03-18): historical matrix summaries `runs/matrix_20260212_030832/summary.csv`, `runs/matrix_20260218_132508/summary.csv`, and `runs/matrix_20260224_213637/summary.csv` were regenerated with the current `tools/aggregate_matrix.py` to remove drift from earlier aggregation logic.
 
 | Setup *(superseded by later locked operating points)* | fine_tune_count | fine_tune_rate | total_cost_usd |
 | ------------------------------ | --------------- | -------------- | -------------- |
@@ -33,28 +35,26 @@ Seeds: `111, 222, 333`
 | Policy | Params | Mean fine_tune_count | Mean total_cost_usd |
 | --- | --- | --- | --- |
 | no_retrain | — | 0.00 | 0.00 |
-| fixed_interval | N=10 | 15.00 | 22.50 |
-| fixed_interval | N=5 | 15.00 | 22.50 |
-| threshold_persistence | T=0.01, K=3 | 11.50 | 17.25 |
+| fixed_interval | N=10 | 10.00 | 15.00 |
+| fixed_interval | N=5 | 20.00 | 30.00 |
+| threshold_persistence | T=0.01, K=3 | 14.00 | 21.00 |
 | threshold_persistence | T=0.01, K=5 | 9.00 | 13.50 |
 
 Plots:
 - `runs/matrix_20260211_063634/plots/fine_tune_count_vs_policy.svg`
 - `runs/matrix_20260211_063634/plots/total_cost_usd_vs_policy.svg`
 - `runs/matrix_20260211_063634/plots/accuracy_count_vs_policy.svg`
-- `runs/matrix_20260211_063634/plots/accuracy_policy_no_retrain.svg`
-- `runs/matrix_20260211_063634/plots/accuracy_policy_fixed_interval.svg`
-- `runs/matrix_20260211_063634/plots/accuracy_policy_threshold_persistence.svg`
 
 Interpretation (this is the important part)
 
 This is a very clean baseline comparison:
 - **no_retrain** → zero cost, zero actions (lower bound).
 - **fixed_interval (N=10 vs N=5)** → more frequent fixed schedules are more expensive as expected.
-- **threshold_persistence (T=0.01, K=3 or K=5)** → fewer retrains than fixed interval; K=5 is more conservative than K=3.
+- **threshold_persistence (T=0.01, K=3 or K=5)** → K=5 is more conservative than K=3; cross-family comparisons should use matched operating points.
 
 What this tells you scientifically:
-- Threshold-based retraining is more cost-efficient than fixed interval in this run (11.5 vs 15 fine-tunes on average).
+- Fixed schedules and threshold persistence both show expected monotonic behavior within each family (`N=5` > `N=10`; `K=3` > `K=5` for action/cost).
+- Cross-family comparisons should be read at matched operating points (for example, `K=5` vs `N=10`) or by explicit family averages.
 - Increasing persistence (K) reduces unnecessary retraining.
 - The architecture cleanly supports multiple policies without changing infrastructure, which makes fair, apples-to-apples comparisons easy.
 
@@ -86,34 +86,10 @@ accuracy ≈ 0.65
 
 That’s cheaper than fixed_interval (N=10) and comparable in accuracy. This gives a strong, publishable baseline: a selective retraining policy can reduce cost without sacrificing performance, and persistence (K) is a simple but effective control knob.
 
-Accuracy plots (per policy, 3 seeds)
-
-Policy: **no_retrain**  
-Mean accuracy summary stats: NA (no model updates)  
-Links:
-- `runs/matrix_20260211_063634/policy=no_retrain_seed111/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=no_retrain_seed222/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=no_retrain_seed333/plots/accuracy_over_time.svg`
-
-Policy: **fixed_interval**  
-Mean accuracy summary stats: see `summary.csv` (accuracy_mean/accuracy_last per seed).  
-Links:
-- `runs/matrix_20260211_063634/policy=fixed_interval_N5_cd0_seed111/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=fixed_interval_N5_cd0_seed222/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=fixed_interval_N5_cd0_seed333/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=fixed_interval_N10_cd0_seed111/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=fixed_interval_N10_cd0_seed222/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=fixed_interval_N10_cd0_seed333/plots/accuracy_over_time.svg`
-
-Policy: **threshold_persistence**  
-Mean accuracy summary stats: see `summary.csv` (accuracy_mean/accuracy_last per seed).  
-Links:
-- `runs/matrix_20260211_063634/policy=threshold_persistence_T0.01_K3_cd0_seed111/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=threshold_persistence_T0.01_K3_cd0_seed222/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=threshold_persistence_T0.01_K3_cd0_seed333/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=threshold_persistence_T0.01_K5_cd0_seed111/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=threshold_persistence_T0.01_K5_cd0_seed222/plots/accuracy_over_time.svg`
-- `runs/matrix_20260211_063634/policy=threshold_persistence_T0.01_K5_cd0_seed333/plots/accuracy_over_time.svg`
+Accuracy artifacts for this matrix snapshot:
+- `runs/matrix_20260211_063634/plots/accuracy_count_vs_policy.svg`
+- Per-seed accuracy-over-time charts were not persisted in this repo snapshot. Regenerate with:
+  - `.venv/bin/python tools/plot_accuracy_gallery.py --matrix-dir runs/matrix_20260211_063634 --out runs/matrix_20260211_063634/plots/accuracy_gallery.svg --policy-only`
 
 ## Policy-Level Means (matrix_20260211_052716)
 
@@ -187,8 +163,9 @@ Windowing: `window_size=200`, `max_rows=20000`, `ref_window=3`, `label_delay_bat
 Seeds: `111, 222, 333`  
 Warm-start: `N=10`, `k=3` (force fine_tune every 3rd step during first 10 decisions)
 
-Accuracy gallery (policy-only):
-![LinUCB accuracy gallery](../runs/matrix_20260212_030832/plots/accuracy_gallery.svg)
+Accuracy gallery (policy-only): this artifact was not persisted in the current repo snapshot.  
+Regenerate with:
+- `.venv/bin/python tools/plot_accuracy_gallery.py --matrix-dir runs/matrix_20260212_030832 --out runs/matrix_20260212_030832/plots/accuracy_gallery.svg --policy-only`
 
 Policy-level means:
 - linucb: fine_tune_mean = 3.0, cost_mean = 4.5, accuracy_mean = 0.4458
@@ -343,15 +320,18 @@ Conditions (same policy/exploration settings):
 Run folders:
 - rolling: `runs/matrix_20260224_224447`
 - shadow: `runs/matrix_20260224_224517`
+  
+`accuracy_count` in the table below is sourced from each run folder's `summary.csv` (`accuracy_count` column).  
+`reward_mean`, `reward_std`, and delta metrics were regenerated from each run's `events.jsonl` using `tools/build_rl_dataset.py` with the flags listed above.
 
 | Condition | Seed | fine_tune_rate | reward_mean | reward_std | delta metric mean | accuracy_count |
 | --- | --- | --- | --- | --- | --- | --- |
 | rolling | 111 | 0.0441 | 0.0062 | 0.0995 | 0.0090 (`delta_acc`) | 9 |
-| shadow | 111 | 0.0441 | 0.0006 | 0.1880 | 0.0034 (`delta_shadow`) | 9 |
+| shadow | 111 | 0.0441 | -0.0026 | 0.0645 | 0.0002 (`delta_shadow`) | 9 |
 | rolling | 222 | 0.0441 | 0.0078 | 0.1196 | 0.0106 (`delta_acc`) | 9 |
-| shadow | 222 | 0.0441 | 0.0018 | 0.1754 | 0.0034 (`delta_shadow`) | 8 |
+| shadow | 222 | 0.0441 | -0.0006 | 0.0573 | 0.0011 (`delta_shadow`) | 8 |
 | rolling | 333 | 0.0396 | 0.0143 | 0.0840 | 0.0158 (`delta_acc`) | 8 |
-| shadow | 333 | 0.0396 | 0.0027 | 0.1784 | 0.0042 (`delta_shadow`) | 8 |
+| shadow | 333 | 0.0396 | -0.0009 | 0.0641 | 0.0006 (`delta_shadow`) | 8 |
 
 Interpretation: we evaluated a stricter shadow-validation reward that credits only update-induced improvements on a held-out buffer. While this variant is more causally isolated, it produced lower signal strength and higher variance than the rolling performance reward. Since both approaches showed consistent policy behavior, we retain rolling reward as the primary training signal and keep shadow evaluation as an ablation for robustness.
 
@@ -385,9 +365,8 @@ Cleaning rules applied:
   - invalid numeric/time rows removed
   - `ArrDel15` normalized to binary `{0,1}`
 
-40k slice outputs used for pipeline sanity:
-- `data/airline_2018_2019_clean_40k.csv`
-- `data/airline_2018_2019_model_ready_40k.csv`
+40k slice outputs used for pipeline sanity were generated locally from:
+- `data/airline/airline_2018_2019.csv` via `tools/clean_airline_dataset.py` and not committed to Git due to size.
 
 Model-ready encoding (for 40k slice):
 - `Reporting_Airline`: one-hot (observed categories in slice)
@@ -396,7 +375,7 @@ Model-ready encoding (for 40k slice):
 
 ### Label Balance Check (ArrDel15)
 
-From `data/airline_2018_2019_clean_40k.csv`:
+From run metadata in `runs/matrix_20260301_035230/*/events.jsonl`:
 - `rows=39049`
 - `class_1=6837`
 - `class_0=32212`

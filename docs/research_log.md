@@ -132,7 +132,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 - eod_pre
 
 ### New Plots
-- artifacts/plots/fairness_tradeoff.svg
+- runs/<matrix_id>/plots/fairness_tradeoff.png
 
 ### New Log Fields
 - task
@@ -190,7 +190,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 - eod_pre
 
 ### New Plots
-- artifacts/plots/fairness_tradeoff.svg
+- runs/<matrix_id>/plots/fairness_tradeoff.png
 
 ### New Log Fields
 - task

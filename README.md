@@ -17,13 +17,13 @@ Current state (v2.0.1):
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install -r requirements-dev.txt
+.venv/bin/python -m pip install -r requirements-dev.txt
 ```
 
 Run tests:
 
 ```bash
-python3 -m unittest
+.venv/bin/python -m unittest
 ```
 
 ## Core CLI
@@ -31,13 +31,13 @@ python3 -m unittest
 Main runner:
 
 ```bash
-python3 -m src.runner.offline_run --help
+.venv/bin/python -m src.runner.offline_run --help
 ```
 
 Matrix runner:
 
 ```bash
-python3 -m tools.run_matrix --help
+.venv/bin/python -m tools.run_matrix --help
 ```
 
 ## Quick Start: Single Run
@@ -51,7 +51,7 @@ RUN_ID="elec_smoke_$(date +%Y%m%d_%H%M%S)"
 RUN_DIR="runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
-python3 -m src.runner.offline_run \
+.venv/bin/python -m src.runner.offline_run \
   --csv data/electricity-normalized.csv \
   --task classification \
   --label-column class \
@@ -73,13 +73,13 @@ python3 -m src.runner.offline_run \
 ### 2) Regression (California Housing)
 
 ```bash
-python3 tools/prepare_california_housing.py --out data/california_housing.csv
+.venv/bin/python tools/prepare_california_housing.py --out data/california_housing.csv
 
 RUN_ID="california_smoke_$(date +%Y%m%d_%H%M%S)"
 RUN_DIR="runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
-python3 -m src.runner.offline_run \
+.venv/bin/python -m src.runner.offline_run \
   --csv data/california_housing.csv \
   --task regression \
   --label-column MedHouseVal \
@@ -102,13 +102,13 @@ python3 -m src.runner.offline_run \
 ### 3) Text Classification (AG News)
 
 ```bash
-python3 tools/prepare_ag_news.py --out data/ag_news.csv --rows 60000
+.venv/bin/python tools/prepare_ag_news.py --out data/ag_news.csv --rows 60000
 
 RUN_ID="agnews_smoke_$(date +%Y%m%d_%H%M%S)"
 RUN_DIR="runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
-python3 -m src.runner.offline_run \
+.venv/bin/python -m src.runner.offline_run \
   --csv data/ag_news.csv \
   --task text_classification \
   --feature-mode tfidf \
@@ -130,13 +130,13 @@ python3 -m src.runner.offline_run \
 ### 4) Fairness Eval Demo (Adult)
 
 ```bash
-python3 tools/prepare_adult.py --out data/adult.csv --target-column income --rows 60000
+.venv/bin/python tools/prepare_adult.py --out data/adult.csv --target-column income --rows 60000
 
 RUN_ID="adult_smoke_$(date +%Y%m%d_%H%M%S)"
 RUN_DIR="runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
-python3 -m src.runner.offline_run \
+.venv/bin/python -m src.runner.offline_run \
   --csv data/adult.csv \
   --task classification \
   --label-column income \
@@ -159,14 +159,14 @@ python3 -m src.runner.offline_run \
 ## Plots + Run Summary
 
 ```bash
-python3 tools/plot_run.py --events "$RUN_DIR/events.jsonl" --outdir "$RUN_DIR/plots"
-python3 tools/summarize_run.py --events "$RUN_DIR/events.jsonl" --out "$RUN_DIR/run_summary.txt"
+.venv/bin/python tools/plot_run.py --events "$RUN_DIR/events.jsonl" --outdir "$RUN_DIR/plots"
+.venv/bin/python tools/summarize_run.py --events "$RUN_DIR/events.jsonl" --out "$RUN_DIR/run_summary.txt"
 ```
 
 ## Matrix Runs (Baselines)
 
 ```bash
-python3 -m tools.run_matrix \
+.venv/bin/python -m tools.run_matrix \
   --csv data/electricity-normalized.csv \
   --task classification \
   --label-column class \
@@ -183,7 +183,7 @@ Aggregate:
 
 ```bash
 LATEST_MATRIX="$(ls -td runs/matrix_* | head -n 1)"
-python3 tools/aggregate_matrix.py --matrix-dir "$LATEST_MATRIX" --out "$LATEST_MATRIX/summary.csv"
+.venv/bin/python tools/aggregate_matrix.py --matrix-dir "$LATEST_MATRIX" --out "$LATEST_MATRIX/summary.csv"
 ```
 
 ## Registry Logger + Deterministic Replay
@@ -191,8 +191,8 @@ python3 tools/aggregate_matrix.py --matrix-dir "$LATEST_MATRIX" --out "$LATEST_M
 Registry logger:
 
 ```bash
-python3 -m services.registry_logger.main \
-  --source runs/<run>/trainer_output.jsonl \
+.venv/bin/python -m services.registry_logger.main \
+  --input runs/<run>/trainer_output.jsonl \
   --canonical runs/<run>/events.jsonl \
   --checkpoint runs/<run>/checkpoints/registry_logger.json \
   --dlq runs/<run>/dlq.jsonl
@@ -201,8 +201,8 @@ python3 -m services.registry_logger.main \
 Replay tool:
 
 ```bash
-python3 -m tools.replay \
-  --canonical runs/<run>/events.jsonl \
+.venv/bin/python -m tools.replay \
+  --source runs/<run>/events.jsonl \
   --out runs/<run>/replay_out.jsonl \
   --from-id state:s_000010 \
   --to-id action:a_000120 \
@@ -214,7 +214,7 @@ python3 -m tools.replay \
 Append chunk-level implementation notes to `docs/research_log.md`:
 
 ```bash
-python3 tools/log_chunk_update.py --help
+.venv/bin/python tools/log_chunk_update.py --help
 ```
 
 ## Where Results Live

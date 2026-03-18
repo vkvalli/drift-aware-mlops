@@ -2,6 +2,7 @@
 
 This document is the condensed, non-redundant summary of final experimental results and locked decisions.  
 For full chronological history, intermediate runs, and superseded tables, see `docs/experiments_log.md`.
+All final tables in this document are sourced from the referenced CSV artifacts under `runs/` and are the authoritative thesis comparison set.
 
 ## 1) Final Baseline and RL Scope
 

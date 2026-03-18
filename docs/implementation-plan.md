@@ -1,5 +1,10 @@
 # Implementation Plan
 
+> Status note (2026-03-18): this file is maintained as a historical execution record.  
+> Some early bootstrap tasks (compose/service skeleton paths) have since evolved.  
+> For the current reproducible workflow and active operating points, use `README.md`, `docs/design_decisions.md`, and `docs/experiments_summary.md`.
+> Repro note: historical command snippets may use `python3`; current standard is `.venv/bin/python`.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Establish the repo skeleton, core compose services (Redis + registry-logger), minimal README with architecture + schemas, and a tiny Electricity replay sample for step-1 readiness.
