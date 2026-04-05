@@ -4,7 +4,7 @@ current benchmark datasets:
 Tabular: Electricity, Airline Delay, Google Cluster Trace
 Text: IMDB, AG News
 Image: Rotated-MNIST, CIFAR-10C (optional later)
-Fairness add-on: Adult
+Fairness add-on: Adult (OpenML benchmark)
 
 think about adding:
 1. uncertainty modeling (confidence intervals, quantiles)
@@ -535,7 +535,7 @@ To support regression, text, and fairness evaluation with one pipeline, runtime 
 Implementation scope clarifications:
 - Text path currently supports TF-IDF features only (`feature_mode=tfidf`).
 - SBERT embeddings are not implemented in this phase.
-- Fairness diagnostics (`dpd_pre`, `eod_pre`) are scoped to binary classification runs (Adult demo); they are not treated as general multiclass/regression fairness metrics in this phase.
+- Fairness diagnostics (`dpd_pre`, `eod_pre`) are scoped to binary classification runs on the Adult OpenML benchmark; they are not treated as general multiclass/regression fairness metrics in this phase.
 
 Metric alignment by task:
 - Electricity: `accuracy_pre` (classification baseline)

@@ -88,7 +88,7 @@ Conclusion: both datasets remained stable across label-delay stress under conser
   - Delayed-label stress summary
 - Active extension phase (in progress):
   - Multi-modal generalization (`classification`, `regression`, `text_classification`)
-  - Evaluation-only fairness diagnostics (`dpd_pre`, `eod_pre`) scoped to binary classification runs (Adult demo)
+  - Evaluation-only fairness diagnostics (`dpd_pre`, `eod_pre`) scoped to binary classification runs on the Adult OpenML benchmark
 - Superseded:
   - early electricity calibration tables
   - early LinUCB low-coverage runs before the `update_count >= 8` gate was satisfied

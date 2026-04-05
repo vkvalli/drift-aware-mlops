@@ -10,7 +10,7 @@ Current state (v2.0.1):
   - Airline Delay (classification + fairness eval fields)
   - California Housing (regression)
   - AG News (text classification)
-  - Adult (fairness evaluation demo)
+  - Adult from OpenML (fairness evaluation benchmark)
 
 ## Setup
 
@@ -127,12 +127,12 @@ mkdir -p "$RUN_DIR"
   --dlq "$RUN_DIR/dlq.jsonl"
 ```
 
-### 4) Fairness Eval Demo (Adult)
+### 4) Fairness Eval Benchmark (Adult from OpenML)
 
 ```bash
 .venv/bin/python tools/prepare_adult.py --out data/adult.csv --target-column income --rows 60000
 
-RUN_ID="adult_smoke_$(date +%Y%m%d_%H%M%S)"
+RUN_ID="adult_openml_smoke_$(date +%Y%m%d_%H%M%S)"
 RUN_DIR="runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
@@ -142,7 +142,7 @@ mkdir -p "$RUN_DIR"
   --label-column income \
   --target-column income \
   --protected-attr sex \
-  --dataset-id adult \
+  --dataset-id adult_openml \
   --window-size 200 \
   --max-rows 40000 \
   --label-delay-batches 2 \

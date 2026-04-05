@@ -318,7 +318,7 @@ from pathlib import Path
 **Commit template:**
 - `feat: add AG News text-classification path with TF-IDF + incremental updates`
 
-#### Fairness Evaluation Support (Adult, evaluation-only)
+#### Fairness Evaluation Support (Adult OpenML benchmark, evaluation-only)
 
 **Files:**
 - Add: `tools/prepare_adult.py`
@@ -336,16 +336,16 @@ from pathlib import Path
 - `eod_pre`
 
 **Scope note:**
-- Fairness diagnostics in this phase are scoped to binary classification runs (Adult demo), not multiclass/regression fairness.
+- Fairness diagnostics in this phase are scoped to binary classification runs on the Adult OpenML benchmark, not multiclass/regression fairness.
 
 **Verify:**
-- `python3 -m src.runner.offline_run ... --dataset-id adult --protected-attr sex ...`
+- `python3 -m src.runner.offline_run ... --dataset-id adult_openml --protected-attr sex ...`
 - `python3 tools/aggregate_matrix.py ...`
 - `python3 tools/plot_fairness_tradeoff.py ...`
 - Expected: fairness fields in `cost` events and summary output
 
 **Commit template:**
-- `feat: add fairness evaluation metrics (DPD/EOD) and reporting for Adult`
+- `feat: add fairness evaluation metrics (DPD/EOD) and reporting for Adult OpenML benchmark`
 
 
 def test_service_requirements_pinned():

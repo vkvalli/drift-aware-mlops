@@ -622,10 +622,10 @@ Interpretation:
 - text path is wired end-to-end and no longer produces degenerate drift.
 - monitor patch now uses both document-length shift and entropy shift in text `drift_core`, yielding non-constant post-warmup drift.
 
-### Adult (Fairness Evaluation Demo)
+### Adult (Fairness Evaluation Benchmark)
 
 Setup:
-- dataset prep: `data/adult.csv` (synthetic 60k rows from `tools/prepare_adult.py`)
+- dataset prep: `data/adult.csv` (OpenML Adult benchmark via `tools/prepare_adult.py`)
 - task: `classification`
 - label: `income`
 - protected attribute: `sex`
@@ -633,7 +633,7 @@ Setup:
 - primary metrics: `accuracy`, `F1`, fairness (`DPD`, `EOD`)
 
 Artifacts:
-- smoke run: `runs/adult_smoke_20260306_024613/events.jsonl`
+- smoke run: `runs/adult_openml_smoke_20260306_024613/events.jsonl`
 - matrix summary: `runs/matrix_20260306_024630/summary.csv`
 - fairness plot: `runs/matrix_20260306_024630/plots/fairness_tradeoff.png`
 
@@ -645,4 +645,4 @@ Artifacts:
 
 Fairness note (minimal demo scope):
 - fairness metrics are evaluation-only in this phase (`dpd_pre`, `eod_pre`) and are not yet part of the policy objective.
-- fairness diagnostics here are scoped to binary classification behavior (Adult `income` target) and are not claimed as a multiclass/regression fairness framework.
+- fairness diagnostics here are scoped to binary classification behavior on the Adult benchmark (`income` target) and are not claimed as a multiclass/regression fairness framework.

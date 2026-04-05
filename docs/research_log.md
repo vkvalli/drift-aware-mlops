@@ -10,7 +10,7 @@ next steps:
 
 Do this for fairness:
 
-Step 1: Pick Adult dataset (fastest fairness dataset)
+Step 1: Pick Adult benchmark dataset from OpenML
 	•	Binary classification.
 	•	Protected attribute: sex.
 	•	Already tabular.
@@ -303,7 +303,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### What Changed
 - data/adult.csv
-- runs/adult_smoke_20260306_024613/events.jsonl
+- runs/adult_openml_smoke_20260306_024613/events.jsonl
 - runs/matrix_20260306_024630/summary.csv
 - runs/matrix_20260306_024630/plots/fairness_tradeoff.png
 
@@ -313,7 +313,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### What To Verify
 - .venv/bin/python tools/prepare_adult.py --out data/adult.csv --target-column income --rows 60000
-- .venv/bin/python -m src.runner.offline_run --csv data/adult.csv --task classification --label-column income --target-column income --protected-attr sex --dataset-id adult --window-size 200 --max-rows 40000 --label-delay-batches 2 --seed 111 --replay-output runs/adult_smoke_20260306_024613/replay.jsonl --state-output runs/adult_smoke_20260306_024613/state.jsonl --actions-output runs/adult_smoke_20260306_024613/actions.jsonl --trainer-output runs/adult_smoke_20260306_024613/trainer_output.jsonl --canonical-output runs/adult_smoke_20260306_024613/events.jsonl --processed-index-file runs/adult_smoke_20260306_024613/processed_actions.jsonl --dlq runs/adult_smoke_20260306_024613/dlq.jsonl
+- .venv/bin/python -m src.runner.offline_run --csv data/adult.csv --task classification --label-column income --target-column income --protected-attr sex --dataset-id adult_openml --window-size 200 --max-rows 40000 --label-delay-batches 2 --seed 111 --replay-output runs/adult_openml_smoke_20260306_024613/replay.jsonl --state-output runs/adult_openml_smoke_20260306_024613/state.jsonl --actions-output runs/adult_openml_smoke_20260306_024613/actions.jsonl --trainer-output runs/adult_openml_smoke_20260306_024613/trainer_output.jsonl --canonical-output runs/adult_openml_smoke_20260306_024613/events.jsonl --processed-index-file runs/adult_openml_smoke_20260306_024613/processed_actions.jsonl --dlq runs/adult_openml_smoke_20260306_024613/dlq.jsonl
 - .venv/bin/python tools/aggregate_matrix.py --matrix-dir runs/matrix_20260306_024630 --out runs/matrix_20260306_024630/summary.csv
 - .venv/bin/python tools/plot_fairness_tradeoff.py --summary runs/matrix_20260306_024630/summary.csv --out runs/matrix_20260306_024630/plots/fairness_tradeoff.png
 
@@ -339,7 +339,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 - cost.eod_pre
 
 ### Known Limitations
-- Adult preparation currently uses synthetic generator unless external input CSV is provided
+- Adult preparation defaults to the OpenML benchmark and only uses a synthetic generator when explicitly requested
 
 ### Next Chunk
 - Milestone D: Update experiments_log modality subsections
@@ -358,7 +358,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 - Document fairness as minimal evaluation-only demo
 
 ### What To Verify
-- rg -n 'Multi-Modal Smoke Validation|California Housing \(Regression\)|AG News \(Text Classification\)|Adult \(Fairness Evaluation Demo\)' docs/experiments_log.md
+- rg -n 'Multi-Modal Smoke Validation|California Housing \(Regression\)|AG News \(Text Classification\)|Adult \(Fairness Evaluation Benchmark\)' docs/experiments_log.md
 - rg -n '^/|^[A-Za-z]:\\\\' docs/*.md
 
 ### Expected Output
@@ -468,9 +468,9 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### Why It Changed
 - Clarify actual implemented text feature path for AG News.
-- Clarify fairness-scope claims for Adult demo to avoid overstatement.
+- Clarify fairness-scope claims for the Adult benchmark path to avoid overstatement.
 
 ### Scope Clarifications Logged
 - AG News text path currently uses TF-IDF (`feature_mode=tfidf`) only.
 - SBERT embeddings are not implemented in this phase.
-- Fairness diagnostics (`dpd_pre`, `eod_pre`) are evaluation-only and scoped to binary classification behavior (Adult demo).
+- Fairness diagnostics (`dpd_pre`, `eod_pre`) are evaluation-only and scoped to binary classification behavior on the Adult OpenML benchmark.
