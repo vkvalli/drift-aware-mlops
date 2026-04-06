@@ -105,6 +105,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-column", type=str, default=None)
     parser.add_argument("--positive-label", type=str, default="UP")
     parser.add_argument("--protected-attr", type=str, default=None)
+    parser.add_argument("--fairness-threshold", type=float, default=0.1,
+                        help="DPD proxy threshold for fairness_trigger policy")
     parser.add_argument(
         "--perf-direction", choices=["higher_better", "lower_better"], default=None
     )
@@ -209,6 +211,7 @@ def main() -> None:
         "label_column": args.label_column,
         "target_column": args.target_column,
         "protected_attr": args.protected_attr,
+        "fairness_threshold": args.fairness_threshold,
         "positive_label": args.positive_label,
         "perf_direction": args.perf_direction,
         "label_distribution": _label_distribution(
@@ -255,6 +258,7 @@ def main() -> None:
         epsilon1=args.epsilon1,
         epsilon1_steps=args.epsilon1_steps,
         epsilon2=args.epsilon2,
+        fairness_threshold=args.fairness_threshold,
         dlq_path=dlq_path,
     )
     append_file_to_canonical(actions_output, canonical_output)

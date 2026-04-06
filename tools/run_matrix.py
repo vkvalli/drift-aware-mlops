@@ -46,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-column", type=str, default=None)
     parser.add_argument("--positive-label", type=str, default="UP")
     parser.add_argument("--protected-attr", type=str, default=None)
+    parser.add_argument("--fairness-threshold", type=float, default=0.1,
+                        help="DPD proxy threshold for fairness_trigger policy")
     parser.add_argument(
         "--perf-direction", choices=["higher_better", "lower_better"], default=None
     )
@@ -116,6 +118,19 @@ def main() -> None:
                         )
             elif policy == "no_retrain":
                 run_id = f"policy=no_retrain_seed{seed}"
+                run_dir = outdir / run_id
+                _run_single(
+                    args,
+                    run_dir,
+                    policy,
+                    seed,
+                    thresholds[0],
+                    ks[0],
+                    fixed_intervals[0],
+                    cooldowns[0],
+                )
+            elif policy == "fairness_trigger":
+                run_id = f"policy=fairness_trigger_seed{seed}"
                 run_dir = outdir / run_id
                 _run_single(
                     args,
@@ -230,6 +245,7 @@ def _run_single(
             argv.extend(["--max-rows", str(args.max_rows)])
         if args.protected_attr:
             argv.extend(["--protected-attr", args.protected_attr])
+        argv.extend(["--fairness-threshold", str(args.fairness_threshold)])
         if args.perf_direction:
             argv.extend(["--perf-direction", args.perf_direction])
         if args.threshold_full is not None:

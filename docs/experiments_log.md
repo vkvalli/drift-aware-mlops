@@ -6,6 +6,44 @@
 > Data validity scope: historical matrix fragments and aborted runs are kept for chronology only and excluded from final claims. In particular, incomplete runs `runs/matrix_20260301_032823` and `runs/matrix_20260301_035039` are non-final.
 > Repro alignment note (2026-03-18): historical matrix summaries `runs/matrix_20260212_030832/summary.csv`, `runs/matrix_20260218_132508/summary.csv`, and `runs/matrix_20260224_213637/summary.csv` were regenerated with the current `tools/aggregate_matrix.py` to remove drift from earlier aggregation logic.
 
+## Dataset Recovery Check (2026-04-06)
+
+Electricity dataset recovery was reconstructed from `electricity-normalized.arff` by retaining the market variables `nswprice`, `nswdemand`, `vicprice`, `vicdemand`, `transfer`, and the label column `class`, while excluding the temporal fields `date`, `day`, and `period`. The rebuilt file was written to `data/electricity-normalized.csv` to restore the expected local path for offline runs.
+
+Two smoke runs were executed against the reconstructed CSV:
+
+| Run | Policy | Key settings | fine_tune_count | total_cost_usd | accuracy_count | accuracy_mean | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `runs/recovery_electricity_smoke_20260406` | `threshold_persistence` | default runner threshold `1.0`, `K=3`, `max_rows=20000`, `seed=111` | 0 | 0.00 | 0 | NA | Pipeline accepted the recovered CSV cleanly; defaults were fully conservative. |
+| `runs/recovery_electricity_smoke_thr001_k3_20260406` | `threshold_persistence` | `threshold=0.01`, `K=3`, `ref_window=3`, `max_rows=20000`, `seed=111` | 14 | 21.00 | 14 | 0.6989 | Matches the expected historical electricity baseline operating point. |
+
+Additional metrics for `runs/recovery_electricity_smoke_thr001_k3_20260406`:
+- `drift_pre_avg = 0.009232`
+- `drift_post_avg = 0.014749`
+- `accuracy_last = 0.7400`
+- `balanced_accuracy_mean = 0.676580`
+- `f1_mean = 0.624004`
+- `total_kwh = 0.00075833`
+- `total_co2_kg = 0.00017669`
+
+Recovery interpretation:
+- The reconstructed electricity CSV is usable by the current offline pipeline without further schema changes.
+- The zero-update default run explains why ad hoc smoke tests can appear empty if the runner threshold is left at `1.0`.
+- The threshold-persistence smoke run with `T=0.01, K=3` reproduces the same action/cost profile family documented in the historical matrix section below, which is strong evidence that the recovered dataset shape is close to the original working file.
+
+Three-seed confirmation (`T=0.01`, `K=3`, `ref_window=3`, `max_rows=20000`):
+
+| Run | Seed | fine_tune_count | total_cost_usd | accuracy_count | accuracy_mean | accuracy_last | balanced_accuracy_mean | f1_mean |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `runs/recovery_electricity_seed111_20260406` | 111 | 14 | 21.00 | 14 | 0.6989 | 0.7400 | 0.6766 | 0.6240 |
+| `runs/recovery_electricity_seed222_20260406` | 222 | 14 | 21.00 | 14 | 0.6357 | 0.5600 | 0.6561 | 0.5048 |
+| `runs/recovery_electricity_seed333_20260406` | 333 | 14 | 21.00 | 14 | 0.6300 | 0.6850 | 0.6454 | 0.5338 |
+
+Seed-level recovery interpretation:
+- The reconstructed dataset reproduces the historical deterministic action pattern exactly for all three seeds: `14` fine-tunes and `$21.00` total cost.
+- This matches the historical electricity baseline matrix for `threshold_persistence (T=0.01, K=3)`, which is the key reproducibility target for dataset recovery.
+- Accuracy-family metrics vary across seeds, as expected, but remain within the same overall operating regime; the main recovery objective here was to confirm that the dataset shape and policy dynamics match the original working setup.
+
 | Setup *(superseded by later locked operating points)* | fine_tune_count | fine_tune_rate | total_cost_usd |
 | ------------------------------ | --------------- | -------------- | -------------- |
 | Raw features, T=0.1            | 86              | 0.86           | high           |

@@ -691,16 +691,19 @@ def run_trainer(
                     shadow_accuracy_pre = shadow_metrics_pre.get("accuracy")
 
         if executed:
+            # Energy model: proxy-only estimate using CPU TDP
+            # kwh = train_time_s * TDP_W / 3_600_000  (TDP_W = 65W CPU proxy)
+            # co2_kg = kwh * 0.233  (UK grid average carbon intensity, BEIS 2023)
+            _TDP_W = 65.0
+            _CO2_INTENSITY = 0.233
             if action_type == "full_retrain":
                 train_time_s = 10.0
                 estimated_usd = 4.5
-                energy_kwh = 0.06
-                co2_kg = 0.0015
             else:
                 train_time_s = 3.0
                 estimated_usd = 1.50
-                energy_kwh = 0.02
-                co2_kg = 0.0005
+            energy_kwh = train_time_s * _TDP_W / 3_600_000
+            co2_kg = energy_kwh * _CO2_INTENSITY
             cost = CostEvent(
                 cost_id=cost_ids.next(),
                 action_id=action_id,

@@ -545,3 +545,45 @@ Metric alignment by task:
 Fairness phase scope is evaluation-only:
 - Log `dpd_pre` and `eod_pre` in `CostEvent`
 - No fairness penalty is added to the RL objective in this phase
+
+## Fairness Intervention (Adult OpenML Benchmark)
+
+### Fairness Metric: DPD Proxy (Label-Distribution)
+
+We compute a label-distribution proxy for Demographic Parity Difference (DPD) per batch window:
+
+```
+fairness_core = |mean(income | sex=Male) - mean(income | sex=Female)|
+```
+
+This is computed in the monitor (`src/monitor/monitor.py`, `_compute_fairness_core`) using the ground-truth label column (`income`) and the protected attribute (`sex`) for each batch window. The result is stored in `StateEvent.fairness_core` and propagated to the policy agent.
+
+**Explicit limitation:** This is a label-distribution proxy, NOT a model-prediction DPD. It measures the absolute difference in mean label values between protected groups within a batch window, using ground-truth labels — not model outputs. It serves as a data-level signal for group imbalance, not a post-hoc model fairness evaluation. True model-prediction DPD would require computing positive prediction rates per group from the deployed model, which is not available at monitor time in this offline pipeline.
+
+### Fairness Trigger Policy
+
+A new `fairness_trigger` policy is added to `src/policy/policy_agent.py`:
+
+- Fires `fine_tune` if `fairness_core > fairness_threshold` (default 0.1) — label-distribution imbalance detected
+- Also fires `fine_tune` if `drift_ready AND drift_core >= threshold` — standard drift trigger
+- Otherwise defers
+
+The `reason` field in `ActionEvent` is set to `"fairness_trigger"` when the fairness condition fires, and `"drift_threshold"` when the drift condition fires.
+
+CLI: `--fairness-threshold` (default 0.1) controls the DPD proxy threshold.
+
+### Benchmark Dataset
+
+- Dataset: Adult (OpenML), 40,000 rows
+- Protected attribute: `sex` (values: "Male", "Female")
+- Target: `income` (binary: 0 = ≤50K, 1 = >50K)
+- Window size: 200 rows, max 40,000 rows, label delay: 2 batches, seed: 111
+
+### Explicit Limitations
+
+1. **Proxy metric only**: `fairness_core` is a label-distribution DPD proxy, not model-prediction DPD. It reflects data-level group imbalance, not model bias.
+2. **Binary classification only**: The proxy is defined for binary labels (0/1). Multi-class or regression tasks use `fairness_core = 0.0`.
+3. **Single protected attribute**: Only one protected attribute (`sex`) is used. Intersectional fairness (e.g., sex × race) is not computed.
+4. **Static threshold**: The `fairness_threshold` is a fixed hyperparameter, not learned or adapted over time.
+5. **No causal model**: The proxy does not distinguish between structural label imbalance and model-induced disparity.
+6. **Offline evaluation only**: Results are from offline replay; online deployment may exhibit different fairness dynamics.

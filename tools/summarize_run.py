@@ -31,6 +31,8 @@ def summarize(events_path: Path, out_path: Path, shift_batch: Optional[int]) -> 
     updates = [e for e in events if e.get("event_type") == "model_update"]
 
     total_cost = sum(float(c.get("estimated_usd", 0.0)) for c in cost)
+    total_kwh = sum(float(c.get("energy_kwh", 0.0)) for c in cost)
+    total_co2_kg = sum(float(c.get("co2_kg", 0.0)) for c in cost)
     fine_tune_actions = [a for a in action if a.get("action_type") == "fine_tune"]
 
     max_batch = max([_batch_index_from_id(b.get("batch_id", "b_000000")) for b in batch], default=0)
@@ -94,6 +96,8 @@ def summarize(events_path: Path, out_path: Path, shift_batch: Optional[int]) -> 
         f.write(f"model_update_executed_count={len(executed_updates)}\n")
         f.write(f"fine_tune_count={len(fine_tune_actions)}\n")
         f.write(f"total_cost_usd={total_cost:.4f}\n")
+        f.write(f"total_kwh={total_kwh:.8f}\n")
+        f.write(f"total_co2_kg={total_co2_kg:.8f}\n")
         f.write(f"shift_batch={shift_batch}\n")
         f.write(f"drift_pre_avg={pre_avg:.6f}\n")
         f.write(f"drift_post_avg={post_avg:.6f}\n")
@@ -127,6 +131,25 @@ def summarize(events_path: Path, out_path: Path, shift_batch: Optional[int]) -> 
             f.write(f"sklearn_available_rate={sklearn_available_rate:.4f}\n")
         else:
             f.write("sklearn_available_rate=NA\n")
+
+        # Fairness summary
+        fairness_core_values = [
+            float(s.get("fairness_core", 0.0))
+            for s in state
+            if s.get("fairness_core") is not None
+        ]
+        fairness_triggered_count = sum(
+            1 for a in action if a.get("reason") == "fairness_trigger"
+        )
+        if fairness_core_values:
+            mean_fc = sum(fairness_core_values) / len(fairness_core_values)
+            max_fc = max(fairness_core_values)
+            f.write(f"mean_fairness_core={mean_fc:.6f}\n")
+            f.write(f"max_fairness_core={max_fc:.6f}\n")
+        else:
+            f.write("mean_fairness_core=NA\n")
+            f.write("max_fairness_core=NA\n")
+        f.write(f"fairness_triggered_count={fairness_triggered_count}\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
