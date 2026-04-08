@@ -4,7 +4,7 @@ import json
 import math
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from src.logger.jsonl_logger import write_event
 from src.schemas.batch import BatchEvent
@@ -40,6 +40,78 @@ def _load_batch_events(events_path: Path, dlq_path: Path) -> List[Dict]:
             if validated:
                 records.append(validated.dict())
     return records
+
+
+def _parse_fairness_label(raw: str) -> Optional[float]:
+    value = str(raw).strip()
+    if value == "":
+        return None
+    lowered = value.lower()
+    if lowered in {"1", "1.0", "true", "yes", ">50k", ">50k."}:
+        return 1.0
+    if lowered in {"0", "0.0", "false", "no", "<=50k", "<=50k."}:
+        return 0.0
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _load_label_groups(
+    csv_path: Path,
+    label_column: str,
+    target_column: str,
+    protected_attr: str,
+) -> Tuple[List[Optional[float]], List[str]]:
+    target_col = target_column or label_column
+    labels: List[Optional[float]] = []
+    groups: List[str] = []
+    try:
+        with csv_path.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                groups.append(str(row.get(protected_attr, "")).strip())
+                labels.append(_parse_fairness_label(str(row.get(target_col, "")).strip()))
+    except Exception:
+        return [], []
+    return labels, groups
+
+
+def _compute_fairness_core(
+    labels: List[Optional[float]],
+    groups: List[str],
+    start: int,
+    end: int,
+) -> Tuple[float, int, int]:
+    """
+    Compute a lagged label-distribution proxy for fairness.
+
+    The proxy is calculated only over batches whose labels would already have
+    arrived by the current decision step. This avoids leaking current-batch
+    ground-truth labels into the policy state under delayed-label evaluation.
+    """
+    group_labels: Dict[str, List[float]] = {}
+    end = min(end, len(labels), len(groups))
+    for idx in range(max(0, start), end):
+        group_val = groups[idx]
+        label_val = labels[idx]
+        if not group_val or label_val is None:
+            continue
+        group_labels.setdefault(group_val, []).append(float(label_val))
+
+    group_names = sorted(group_labels.keys())
+    if len(group_names) < 2:
+        return 0.0, 0, 0
+    g0, g1 = group_names[0], group_names[1]
+    vals0 = group_labels[g0]
+    vals1 = group_labels[g1]
+    if not vals0 or not vals1:
+        return 0.0, 0, 0
+    mean0 = sum(vals0) / len(vals0)
+    mean1 = sum(vals1) / len(vals1)
+    support_total = len(vals0) + len(vals1)
+    support_min_group = min(len(vals0), len(vals1))
+    return abs(mean0 - mean1), support_total, support_min_group
 
 
 def _load_numeric_rows(
@@ -152,6 +224,8 @@ def run_monitor(
     label_column: str = "class",
     target_column: str = "class",
     protected_attr: str = "",
+    fairness_min_support: int = 200,
+    fairness_min_group_support: int = 50,
     dlq_path: Path = Path("artifacts/dlq.jsonl"),
 ) -> int:
     batch_events = _load_batch_events(events_path, dlq_path)
@@ -171,6 +245,16 @@ def run_monitor(
     feature_keys: List[str] = []
     if rows:
         feature_keys = [k for k in rows[0].keys() if k not in EXCLUDED_COLUMNS]
+
+    fairness_labels: List[Optional[float]] = []
+    fairness_groups: List[str] = []
+    if task == "classification" and protected_attr:
+        fairness_labels, fairness_groups = _load_label_groups(
+            csv_path=csv_path,
+            label_column=label_column,
+            target_column=target_column,
+            protected_attr=protected_attr,
+        )
 
     num_batches = (max(len(rows), len(text_rows)) + window_size - 1) // window_size
     batch_means: List[List[float]] = []
@@ -222,6 +306,31 @@ def run_monitor(
                 drift_core, drift_max = _drift_stats(current_mean, ref)
             drift_ready = True
 
+        fairness_core = 0.0
+        fairness_ready = False
+        fairness_support = 0
+        if fairness_labels and fairness_groups:
+            delay_batches = int(batch.get("label_delay_batches", 0) or 0)
+            latest_available_batch = i - delay_batches
+            if latest_available_batch >= 0:
+                start_batch = max(0, latest_available_batch - ref_window + 1)
+                start_idx = start_batch * window_size
+                end_idx = (latest_available_batch + 1) * window_size
+                # fairness_core is a lagged proxy computed from only those
+                # labeled windows that would already be visible to the system.
+                fairness_core, fairness_support, fairness_min_group = _compute_fairness_core(
+                    labels=fairness_labels,
+                    groups=fairness_groups,
+                    start=start_idx,
+                    end=end_idx,
+                )
+                fairness_ready = (
+                    fairness_support >= fairness_min_support
+                    and fairness_min_group >= fairness_min_group_support
+                )
+                if not fairness_ready:
+                    fairness_core = 0.0
+
         state_event = StateEvent(
             state_id=state_ids.next(),
             batch_id=batch["batch_id"],
@@ -233,7 +342,9 @@ def run_monitor(
             drift_max=drift_max,
             drift_ready=drift_ready,
             perf_core=0.0,
-            fairness_core=0.0,
+            fairness_core=fairness_core,
+            fairness_ready=fairness_ready,
+            fairness_support=fairness_support,
         )
         validated_state = validate_or_dlq(state_event.dict(), StateEvent, dlq_path)
         if validated_state:

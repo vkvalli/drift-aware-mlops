@@ -43,6 +43,9 @@ def run_policy(
     epsilon1: float = 0.05,
     epsilon1_steps: int = 50,
     epsilon2: float = 0.01,
+    fairness_threshold: float = 0.1,
+    fairness_threshold_low: Optional[float] = None,
+    fairness_threshold_full: Optional[float] = None,
     dlq_path: Path = Path("artifacts/dlq.jsonl"),
 ) -> int:
     states = _load_state_events(states_path, dlq_path)
@@ -57,6 +60,7 @@ def run_policy(
     consecutive = 0
     cooldown_remaining = 0
     action_index = 0
+    fairness_armed = False
     linucb = None
     if policy == "linucb" and linucb_model_path and linucb_model_path.exists():
         from src.rl.linucb import LinUCB  # noqa: F401
@@ -67,6 +71,8 @@ def run_policy(
         action_index += 1
         drift_ready = bool(state.get("drift_ready", False))
         drift_core = float(state.get("drift_core", 0.0))
+        fairness_core = float(state.get("fairness_core", 0.0))
+        fairness_ready = bool(state.get("fairness_ready", False))
 
         if policy == "linucb" and linucb is not None:
             if warm_start_n > 0 and action_index <= warm_start_n:
@@ -105,6 +111,51 @@ def run_policy(
         elif policy == "no_retrain":
             action_type = "defer"
             reason = "no_retrain"
+        elif policy == "fairness_trigger":
+            # fairness_trigger is fairness-led and uses hysteresis plus
+            # persistence/cooldown controls to avoid thrashing around a
+            # single fairness threshold.
+            low_threshold = (
+                fairness_threshold_low
+                if fairness_threshold_low is not None
+                else fairness_threshold
+            )
+            if fairness_armed:
+                if fairness_core <= low_threshold:
+                    fairness_armed = False
+            elif fairness_core >= fairness_threshold:
+                fairness_armed = True
+
+            fairness_triggered = fairness_armed
+            if fairness_armed and fairness_ready:
+                consecutive += 1
+            else:
+                consecutive = 0
+
+            if cooldown_remaining > 0:
+                cooldown_remaining -= 1
+                action_type = "defer"
+                reason = "cooldown"
+            elif (
+                fairness_ready
+                and fairness_threshold_full is not None
+                and fairness_core >= fairness_threshold_full
+                and consecutive >= consecutive_k
+            ):
+                action_type = "full_retrain"
+                reason = "fairness_full_retrain"
+                cooldown_remaining = cooldown
+                consecutive = 0
+                fairness_armed = False
+            elif fairness_triggered and consecutive >= consecutive_k:
+                action_type = "fine_tune"
+                reason = "fairness_trigger"
+                cooldown_remaining = cooldown
+                consecutive = 0
+                fairness_armed = False
+            else:
+                action_type = "defer"
+                reason = "fairness_not_ready" if not fairness_ready else "below_fairness_threshold"
         elif policy == "fixed_interval":
             if fixed_interval <= 0:
                 action_type = "defer"
@@ -165,6 +216,9 @@ def run_policy(
                 "epsilon1": epsilon1,
                 "epsilon1_steps": epsilon1_steps,
                 "epsilon2": epsilon2,
+                "fairness_threshold": fairness_threshold,
+                "fairness_threshold_low": fairness_threshold_low,
+                "fairness_threshold_full": fairness_threshold_full,
             },
             requested_at=requested_at,
         )
@@ -194,6 +248,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--action-start", type=int, default=1)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--dlq", default="artifacts/dlq.jsonl")
+    parser.add_argument("--fairness-threshold", type=float, default=0.1,
+                        help="DPD proxy threshold for fairness_trigger policy (default: 0.1)")
+    parser.add_argument("--fairness-threshold-low", type=float, default=None,
+                        help="Lower hysteresis threshold for fairness_trigger policy")
+    parser.add_argument("--fairness-threshold-full", type=float, default=None,
+                        help="High-severity DPD proxy threshold for fairness-triggered full retrain")
     return parser
 
 
@@ -218,6 +278,9 @@ def main() -> None:
         epsilon1=args.epsilon1,
         epsilon1_steps=args.epsilon1_steps,
         epsilon2=args.epsilon2,
+        fairness_threshold=args.fairness_threshold,
+        fairness_threshold_low=args.fairness_threshold_low,
+        fairness_threshold_full=args.fairness_threshold_full,
         dlq_path=Path(args.dlq),
     )
 
