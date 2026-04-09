@@ -64,6 +64,7 @@ def run_policy(
     linucb = None
     if policy == "linucb" and linucb_model_path and linucb_model_path.exists():
         from src.rl.linucb import LinUCB  # noqa: F401
+
         with linucb_model_path.open("rb") as f:
             linucb = pickle.load(f)
 
@@ -127,7 +128,7 @@ def run_policy(
                 fairness_armed = True
 
             fairness_triggered = fairness_armed
-            if fairness_armed and fairness_ready:
+            if fairness_triggered:
                 consecutive += 1
             else:
                 consecutive = 0
@@ -155,7 +156,11 @@ def run_policy(
                 fairness_armed = False
             else:
                 action_type = "defer"
-                reason = "fairness_not_ready" if not fairness_ready else "below_fairness_threshold"
+                reason = (
+                    "fairness_not_ready"
+                    if not fairness_ready
+                    else "below_fairness_threshold"
+                )
         elif policy == "fixed_interval":
             if fixed_interval <= 0:
                 action_type = "defer"
@@ -239,7 +244,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--policy", type=str, default="threshold_persistence")
     parser.add_argument("--fixed-interval", type=int, default=10)
     parser.add_argument("--cooldown", type=int, default=0)
-    parser.add_argument("--linucb-model", type=str, default="artifacts/policies/linucb.pkl")
+    parser.add_argument(
+        "--linucb-model", type=str, default="artifacts/policies/linucb.pkl"
+    )
     parser.add_argument("--warm-start-n", type=int, default=30)
     parser.add_argument("--warm-start-k", type=int, default=6)
     parser.add_argument("--epsilon1", type=float, default=0.05)
@@ -248,12 +255,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--action-start", type=int, default=1)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--dlq", default="artifacts/dlq.jsonl")
-    parser.add_argument("--fairness-threshold", type=float, default=0.1,
-                        help="DPD proxy threshold for fairness_trigger policy (default: 0.1)")
-    parser.add_argument("--fairness-threshold-low", type=float, default=None,
-                        help="Lower hysteresis threshold for fairness_trigger policy")
-    parser.add_argument("--fairness-threshold-full", type=float, default=None,
-                        help="High-severity DPD proxy threshold for fairness-triggered full retrain")
+    parser.add_argument(
+        "--fairness-threshold",
+        type=float,
+        default=0.1,
+        help="DPD proxy threshold for fairness_trigger policy (default: 0.1)",
+    )
+    parser.add_argument(
+        "--fairness-threshold-low",
+        type=float,
+        default=None,
+        help="Lower hysteresis threshold for fairness_trigger policy",
+    )
+    parser.add_argument(
+        "--fairness-threshold-full",
+        type=float,
+        default=None,
+        help="High-severity DPD proxy threshold for fairness-triggered full retrain",
+    )
     return parser
 
 

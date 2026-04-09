@@ -71,7 +71,9 @@ def _load_label_groups(
             reader = csv.DictReader(f)
             for row in reader:
                 groups.append(str(row.get(protected_attr, "")).strip())
-                labels.append(_parse_fairness_label(str(row.get(target_col, "")).strip()))
+                labels.append(
+                    _parse_fairness_label(str(row.get(target_col, "")).strip())
+                )
     except Exception:
         return [], []
     return labels, groups
@@ -99,17 +101,19 @@ def _compute_fairness_core(
             continue
         group_labels.setdefault(group_val, []).append(float(label_val))
 
+    support_total = sum(len(vals) for vals in group_labels.values())
     group_names = sorted(group_labels.keys())
     if len(group_names) < 2:
-        return 0.0, 0, 0
+        # Labels have arrived, but there is not enough subgroup coverage yet
+        # to compute a meaningful gap signal.
+        return 0.0, support_total, 0
     g0, g1 = group_names[0], group_names[1]
     vals0 = group_labels[g0]
     vals1 = group_labels[g1]
     if not vals0 or not vals1:
-        return 0.0, 0, 0
+        return 0.0, support_total, 0
     mean0 = sum(vals0) / len(vals0)
     mean1 = sum(vals1) / len(vals1)
-    support_total = len(vals0) + len(vals1)
     support_min_group = min(len(vals0), len(vals1))
     return abs(mean0 - mean1), support_total, support_min_group
 
@@ -318,11 +322,13 @@ def run_monitor(
                 end_idx = (latest_available_batch + 1) * window_size
                 # fairness_core is a lagged proxy computed from only those
                 # labeled windows that would already be visible to the system.
-                fairness_core, fairness_support, fairness_min_group = _compute_fairness_core(
-                    labels=fairness_labels,
-                    groups=fairness_groups,
-                    start=start_idx,
-                    end=end_idx,
+                fairness_core, fairness_support, fairness_min_group = (
+                    _compute_fairness_core(
+                        labels=fairness_labels,
+                        groups=fairness_groups,
+                        start=start_idx,
+                        end=end_idx,
+                    )
                 )
                 fairness_ready = (
                     fairness_support >= fairness_min_support
