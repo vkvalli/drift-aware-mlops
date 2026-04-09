@@ -16,15 +16,20 @@ def _load_events(path: Path) -> List[Dict]:
 def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
     records = [e for e in events if e.get("event_type") != "run_meta"]
     batch = [e for e in records if e.get("event_type") in {"BatchEvent", "batch"}]
+    states = [e for e in records if e.get("event_type") in {"state", "StateEvent"}]
     action = [e for e in records if e.get("event_type") == "action"]
     cost = [e for e in records if e.get("event_type") == "cost"]
     updates = [e for e in records if e.get("event_type") == "model_update"]
     fine_tune = [a for a in action if a.get("action_type") == "fine_tune"]
 
     total_cost = sum(float(c.get("estimated_usd", 0.0)) for c in cost)
+    total_kwh = sum(float(c.get("energy_kwh", 0.0)) for c in cost)
+    total_co2_kg = sum(float(c.get("co2_kg", 0.0)) for c in cost)
     action_count = len(action)
     fine_tune_count = len(fine_tune)
     batch_count = len(batch)
+    mean_kwh_per_action = total_kwh / action_count if action_count else 0.0
+    mean_co2_per_action = total_co2_kg / action_count if action_count else 0.0
 
     cost_per_update = total_cost / fine_tune_count if fine_tune_count else 0.0
     action_rate = fine_tune_count / action_count if action_count else 0.0
@@ -80,6 +85,14 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
     dpd_count, dpd_mean, dpd_std, dpd_min, dpd_last = _series_stats(dpd_values)
     eod_count, eod_mean, eod_std, eod_min, eod_last = _series_stats(eod_values)
 
+    # Fairness core from state events (label-distribution DPD proxy)
+    fairness_core_values = _collect_float(states, "fairness_core")
+    fairness_triggered_count = sum(
+        1 for a in action if a.get("reason") == "fairness_trigger"
+    )
+    fc_count, fc_mean, fc_std, fc_min, fc_last = _series_stats(fairness_core_values)
+    fc_max = max(fairness_core_values) if fairness_core_values else None
+
     update_accuracies = []
     for u in updates:
         if not u.get("executed", False):
@@ -101,6 +114,10 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
         "total_cost_usd": round(total_cost, 4),
         "cost_per_update": round(cost_per_update, 4),
         "action_rate": round(action_rate, 4),
+        "total_kwh": round(total_kwh, 8),
+        "total_co2_kg": round(total_co2_kg, 8),
+        "mean_kwh_per_action": round(mean_kwh_per_action, 8),
+        "mean_co2_per_action": round(mean_co2_per_action, 8),
         "accuracy_count": accuracy_count,
         "accuracy_mean": round(accuracy_mean, 4) if accuracy_mean is not None else "NA",
         "accuracy_std": round(accuracy_std, 4) if accuracy_std is not None else "NA",
@@ -158,6 +175,9 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
         "eod_min": round(eod_min, 4) if eod_min is not None else "NA",
         "eod_last": round(eod_last, 4) if eod_last is not None else "NA",
         "update_accuracy_count": update_accuracy_count,
+        "mean_fairness_core": round(fc_mean, 4) if fc_mean is not None else "NA",
+        "max_fairness_core": round(fc_max, 4) if fc_max is not None else "NA",
+        "fairness_triggered_count": fairness_triggered_count,
     }
 
 
@@ -214,6 +234,10 @@ def aggregate(matrix_dir: Path, out_path: Path) -> None:
         "total_cost_usd",
         "cost_per_update",
         "action_rate",
+        "total_kwh",
+        "total_co2_kg",
+        "mean_kwh_per_action",
+        "mean_co2_per_action",
         "accuracy_count",
         "accuracy_mean",
         "accuracy_std",
@@ -255,6 +279,9 @@ def aggregate(matrix_dir: Path, out_path: Path) -> None:
         "eod_min",
         "eod_last",
         "update_accuracy_count",
+        "mean_fairness_core",
+        "max_fairness_core",
+        "fairness_triggered_count",
     ]
     with out_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

@@ -42,6 +42,76 @@ def _load_batch_events(events_path: Path, dlq_path: Path) -> List[Dict]:
     return records
 
 
+def _compute_fairness_core(
+    csv_path: Path,
+    label_column: str,
+    target_column: str,
+    protected_attr: str,
+    start: int,
+    end: int,
+) -> float:
+    """
+    Compute a label-distribution proxy for fairness (DPD proxy).
+
+    This is NOT a model-prediction fairness metric. It measures the absolute
+    difference in mean label values between two protected groups within a batch
+    window, using the ground-truth label column. This serves as a data-level
+    signal for group imbalance, not a post-hoc model fairness evaluation.
+
+    DPD proxy = |mean_label(group_A) - mean_label(group_B)|
+
+    Returns 0.0 if protected_attr is empty, fewer than 2 groups are present,
+    or the task is not classification.
+    """
+    if not protected_attr:
+        return 0.0
+    target_col = target_column or label_column
+    group_labels: Dict[str, List[float]] = {}
+    row_idx = 0
+    try:
+        with csv_path.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row_idx < start:
+                    row_idx += 1
+                    continue
+                if row_idx >= end:
+                    break
+                row_idx += 1
+                group_val = str(row.get(protected_attr, "")).strip()
+                label_raw = str(row.get(target_col, "")).strip()
+                if not group_val or not label_raw:
+                    continue
+                try:
+                    label_float = float(label_raw)
+                except ValueError:
+                    # Handle string labels like ">50K" / "<=50K"
+                    low = label_raw.lower()
+                    if low in {"1", "true", "yes", ">50k", ">50k."}:
+                        label_float = 1.0
+                    elif low in {"0", "false", "no", "<=50k", "<=50k."}:
+                        label_float = 0.0
+                    else:
+                        continue
+                if group_val not in group_labels:
+                    group_labels[group_val] = []
+                group_labels[group_val].append(label_float)
+    except Exception:
+        return 0.0
+
+    groups = sorted(group_labels.keys())
+    if len(groups) < 2:
+        return 0.0
+    g0, g1 = groups[0], groups[1]
+    vals0 = group_labels[g0]
+    vals1 = group_labels[g1]
+    if not vals0 or not vals1:
+        return 0.0
+    mean0 = sum(vals0) / len(vals0)
+    mean1 = sum(vals1) / len(vals1)
+    return abs(mean0 - mean1)
+
+
 def _load_numeric_rows(
     csv_path: Path, label_column: str, target_column: str, protected_attr: str
 ) -> List[Dict[str, float]]:
@@ -222,6 +292,22 @@ def run_monitor(
                 drift_core, drift_max = _drift_stats(current_mean, ref)
             drift_ready = True
 
+        # Compute fairness_core as a label-distribution DPD proxy when
+        # task == "classification" and a protected_attr is provided.
+        # This uses ground-truth labels in the batch window, NOT model predictions.
+        fairness_core = 0.0
+        if task == "classification" and protected_attr:
+            batch_start = i * window_size
+            batch_end = min(batch_start + window_size, len(rows) + window_size)
+            fairness_core = _compute_fairness_core(
+                csv_path=csv_path,
+                label_column=label_column,
+                target_column=target_column,
+                protected_attr=protected_attr,
+                start=batch_start,
+                end=batch_start + window_size,
+            )
+
         state_event = StateEvent(
             state_id=state_ids.next(),
             batch_id=batch["batch_id"],
@@ -233,7 +319,7 @@ def run_monitor(
             drift_max=drift_max,
             drift_ready=drift_ready,
             perf_core=0.0,
-            fairness_core=0.0,
+            fairness_core=fairness_core,
         )
         validated_state = validate_or_dlq(state_event.dict(), StateEvent, dlq_path)
         if validated_state:

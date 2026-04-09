@@ -125,6 +125,9 @@ def plot_run(events_path: Path, outdir: Path) -> None:
     # Plot 4: Accuracy over time (SVG, no matplotlib dependency)
     _plot_accuracy_over_time(updates, actions_sorted, outdir / "accuracy_over_time.svg")
 
+    # Plot 5: Fairness core over time (SVG)
+    _plot_fairness_over_time(states_sorted, outdir / "fairness_core_timeseries.svg")
+
     # Run summary (stdlib-only)
     summary_path = outdir / "run_report.txt"
     batch_count = len(
@@ -232,6 +235,46 @@ def _plot_accuracy_over_time(
                 f'<line x1="{px:.1f}" y1="{py:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="#59a14f"/>'
             )
 
+    _save_svg(out_path, width, height, svg)
+
+
+def _plot_fairness_over_time(states_sorted: List[Dict], out_path: Path) -> None:
+    """Plot fairness_core (label-distribution DPD proxy) over batch index as SVG."""
+    points = [
+        (_batch_index_from_id(s.get("batch_id", "b_000000")), float(s.get("fairness_core", 0.0)))
+        for s in states_sorted
+    ]
+    if not points:
+        _save_svg(out_path, 640, 360, _svg_text("No fairness data"))
+        return
+
+    width, height, margin = 640, 360, 50
+    chart_w = width - 2 * margin
+    chart_h = height - 2 * margin
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    max_x = max(xs) if xs else 1
+    max_y = max(ys) if ys else 1.0
+    if max_y == 0.0:
+        max_y = 1.0
+
+    svg: List[str] = [
+        f'<rect width="{width}" height="{height}" fill="white"/>',
+        f'<text x="{width/2}" y="24" text-anchor="middle" font-size="16" font-family="Arial">Fairness Core (DPD Proxy) Over Time</text>',
+        f'<line x1="{margin}" y1="{height-margin}" x2="{width-margin}" y2="{height-margin}" stroke="#333"/>',
+        f'<line x1="{margin}" y1="{margin}" x2="{margin}" y2="{height-margin}" stroke="#333"/>',
+        f'<text x="{width/2}" y="{height-10}" text-anchor="middle" font-size="11" font-family="Arial">Batch Index</text>',
+        f'<text x="14" y="{height/2}" text-anchor="middle" font-size="11" font-family="Arial" transform="rotate(-90 14,{height/2})">DPD Proxy</text>',
+    ]
+    for i, (xv, yv) in enumerate(points):
+        x = margin + (xv / max(max_x, 1)) * chart_w
+        y = height - margin - (yv / max_y) * chart_h
+        svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="#e15759"/>')
+        if i > 0:
+            prev_xv, prev_yv = points[i - 1]
+            px = margin + (prev_xv / max(max_x, 1)) * chart_w
+            py = height - margin - (prev_yv / max_y) * chart_h
+            svg.append(f'<line x1="{px:.1f}" y1="{py:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="#e15759"/>')
     _save_svg(out_path, width, height, svg)
 
 

@@ -43,6 +43,7 @@ def run_policy(
     epsilon1: float = 0.05,
     epsilon1_steps: int = 50,
     epsilon2: float = 0.01,
+    fairness_threshold: float = 0.1,
     dlq_path: Path = Path("artifacts/dlq.jsonl"),
 ) -> int:
     states = _load_state_events(states_path, dlq_path)
@@ -67,6 +68,7 @@ def run_policy(
         action_index += 1
         drift_ready = bool(state.get("drift_ready", False))
         drift_core = float(state.get("drift_core", 0.0))
+        fairness_core = float(state.get("fairness_core", 0.0))
 
         if policy == "linucb" and linucb is not None:
             if warm_start_n > 0 and action_index <= warm_start_n:
@@ -105,6 +107,20 @@ def run_policy(
         elif policy == "no_retrain":
             action_type = "defer"
             reason = "no_retrain"
+        elif policy == "fairness_trigger":
+            # Trigger fine_tune if fairness_core exceeds fairness_threshold
+            # OR if drift_core exceeds the drift threshold.
+            fairness_triggered = fairness_core > fairness_threshold
+            drift_triggered = drift_ready and drift_core >= threshold
+            if fairness_triggered:
+                action_type = "fine_tune"
+                reason = "fairness_trigger"
+            elif drift_triggered:
+                action_type = "fine_tune"
+                reason = "drift_threshold"
+            else:
+                action_type = "defer"
+                reason = "below_threshold"
         elif policy == "fixed_interval":
             if fixed_interval <= 0:
                 action_type = "defer"
@@ -165,6 +181,7 @@ def run_policy(
                 "epsilon1": epsilon1,
                 "epsilon1_steps": epsilon1_steps,
                 "epsilon2": epsilon2,
+                "fairness_threshold": fairness_threshold,
             },
             requested_at=requested_at,
         )
@@ -194,6 +211,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--action-start", type=int, default=1)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--dlq", default="artifacts/dlq.jsonl")
+    parser.add_argument("--fairness-threshold", type=float, default=0.1,
+                        help="DPD proxy threshold for fairness_trigger policy (default: 0.1)")
     return parser
 
 
@@ -218,6 +237,7 @@ def main() -> None:
         epsilon1=args.epsilon1,
         epsilon1_steps=args.epsilon1_steps,
         epsilon2=args.epsilon2,
+        fairness_threshold=args.fairness_threshold,
         dlq_path=Path(args.dlq),
     )
 
