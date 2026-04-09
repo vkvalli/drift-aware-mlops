@@ -20,6 +20,8 @@ class TestStateEvent(unittest.TestCase):
         self.assertEqual(event.state_id, "s_000001")
         self.assertEqual(event.batch_id, "b_000001")
         self.assertEqual(event.schema_version, "v1")
+        self.assertFalse(event.fairness_ready)
+        self.assertEqual(event.fairness_support, 0)
 
 
 if __name__ == "__main__":

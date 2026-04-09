@@ -32,6 +32,8 @@ def summarize(events_path: Path, out_path: Path, shift_batch: Optional[int]) -> 
 
     total_cost = sum(float(c.get("estimated_usd", 0.0)) for c in cost)
     fine_tune_actions = [a for a in action if a.get("action_type") == "fine_tune"]
+    full_retrain_actions = [a for a in action if a.get("action_type") == "full_retrain"]
+    update_actions = fine_tune_actions + full_retrain_actions
 
     max_batch = max([_batch_index_from_id(b.get("batch_id", "b_000000")) for b in batch], default=0)
     if shift_batch is None:
@@ -93,6 +95,8 @@ def summarize(events_path: Path, out_path: Path, shift_batch: Optional[int]) -> 
         f.write(f"model_update_count_total={len(updates)}\n")
         f.write(f"model_update_executed_count={len(executed_updates)}\n")
         f.write(f"fine_tune_count={len(fine_tune_actions)}\n")
+        f.write(f"full_retrain_count={len(full_retrain_actions)}\n")
+        f.write(f"update_count={len(update_actions)}\n")
         f.write(f"total_cost_usd={total_cost:.4f}\n")
         f.write(f"shift_batch={shift_batch}\n")
         f.write(f"drift_pre_avg={pre_avg:.6f}\n")

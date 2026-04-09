@@ -1,5 +1,5 @@
 from src.schemas.base import BaseEvent
-from src.schemas.compat import StrictBool, StrictFloat, StrictStr
+from src.schemas.compat import StrictBool, StrictFloat, StrictInt, StrictStr
 
 
 class StateEvent(BaseEvent):
@@ -17,3 +17,5 @@ class StateEvent(BaseEvent):
     drift_ready: StrictBool
     perf_core: StrictFloat
     fairness_core: StrictFloat
+    fairness_ready: StrictBool = False
+    fairness_support: StrictInt = 0

@@ -93,6 +93,61 @@ class TestMonitor(unittest.TestCase):
         seq2 = [(r["batch_id"], r["state_id"], r["drift_core"]) for r in second]
         self.assertEqual(seq1, seq2)
 
+    def test_fairness_core_uses_only_arrived_labels(self):
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            csv_path = tmp / "adult_like.csv"
+            events_path = tmp / "events.jsonl"
+            state_path = tmp / "state.jsonl"
+
+            rows = [
+                ("Male", 1, 0.0),
+                ("Male", 1, 0.1),
+                ("Female", 0, 0.2),
+                ("Female", 0, 0.3),
+                ("Male", 0, 0.4),
+                ("Female", 1, 0.5),
+            ]
+            with csv_path.open("w", encoding="utf-8") as f:
+                f.write("sex,class,value\n")
+                for sex, label, value in rows:
+                    f.write(f"{sex},{label},{value}\n")
+
+            run_replay(
+                csv_path=csv_path,
+                window_size=2,
+                label_delay_batches=2,
+                flush_pending_labels=True,
+                dataset_id="adult_openml",
+                model_version="m_000001",
+                output_path=events_path,
+            )
+            run_monitor(
+                events_path=events_path,
+                csv_path=csv_path,
+                output_path=state_path,
+                window_size=2,
+                ref_window=2,
+                task="classification",
+                label_column="class",
+                target_column="class",
+                protected_attr="sex",
+            )
+
+            states = [json.loads(line) for line in state_path.read_text().splitlines()]
+            fairness_seq = [round(float(s["fairness_core"]), 4) for s in states]
+            ready_seq = [bool(s["fairness_ready"]) for s in states]
+            support_seq = [int(s["fairness_support"]) for s in states]
+
+            # With label_delay_batches=2, the first two batches cannot use any
+            # fairness signal yet. The third batch can only use batch 1 labels.
+            self.assertEqual(fairness_seq[0], 0.0)
+            self.assertEqual(fairness_seq[1], 0.0)
+            self.assertFalse(ready_seq[0])
+            self.assertFalse(ready_seq[1])
+            self.assertEqual(support_seq[2], 2)
+            self.assertEqual(fairness_seq[2], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

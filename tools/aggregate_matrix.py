@@ -20,14 +20,18 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
     cost = [e for e in records if e.get("event_type") == "cost"]
     updates = [e for e in records if e.get("event_type") == "model_update"]
     fine_tune = [a for a in action if a.get("action_type") == "fine_tune"]
+    full_retrain = [a for a in action if a.get("action_type") == "full_retrain"]
+    updates_all = fine_tune + full_retrain
 
     total_cost = sum(float(c.get("estimated_usd", 0.0)) for c in cost)
     action_count = len(action)
     fine_tune_count = len(fine_tune)
+    full_retrain_count = len(full_retrain)
+    update_count = len(updates_all)
     batch_count = len(batch)
 
-    cost_per_update = total_cost / fine_tune_count if fine_tune_count else 0.0
-    action_rate = fine_tune_count / action_count if action_count else 0.0
+    cost_per_update = total_cost / update_count if update_count else 0.0
+    action_rate = update_count / action_count if action_count else 0.0
 
     def _collect_float(series: List[Dict], key: str) -> List[float]:
         vals: List[float] = []
@@ -98,6 +102,8 @@ def _compute_metrics(events: List[Dict]) -> Dict[str, float]:
         "batch_count": batch_count,
         "action_count": action_count,
         "fine_tune_count": fine_tune_count,
+        "full_retrain_count": full_retrain_count,
+        "update_count": update_count,
         "total_cost_usd": round(total_cost, 4),
         "cost_per_update": round(cost_per_update, 4),
         "action_rate": round(action_rate, 4),
@@ -211,6 +217,8 @@ def aggregate(matrix_dir: Path, out_path: Path) -> None:
         "batch_count",
         "action_count",
         "fine_tune_count",
+        "full_retrain_count",
+        "update_count",
         "total_cost_usd",
         "cost_per_update",
         "action_rate",

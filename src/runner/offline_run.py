@@ -105,6 +105,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-column", type=str, default=None)
     parser.add_argument("--positive-label", type=str, default="UP")
     parser.add_argument("--protected-attr", type=str, default=None)
+    parser.add_argument("--fairness-threshold", type=float, default=0.1,
+                        help="DPD proxy threshold for fairness_trigger policy")
+    parser.add_argument("--fairness-threshold-low", type=float, default=None,
+                        help="Lower hysteresis threshold for fairness_trigger policy")
+    parser.add_argument("--fairness-threshold-full", type=float, default=None,
+                        help="High-severity DPD proxy threshold for fairness-triggered full retrain")
+    parser.add_argument("--fairness-min-support", type=int, default=200,
+                        help="Minimum lagged labeled support before fairness trigger becomes active")
+    parser.add_argument("--fairness-min-group-support", type=int, default=50,
+                        help="Minimum lagged labeled support per group before fairness trigger becomes active")
     parser.add_argument(
         "--perf-direction", choices=["higher_better", "lower_better"], default=None
     )
@@ -209,6 +219,11 @@ def main() -> None:
         "label_column": args.label_column,
         "target_column": args.target_column,
         "protected_attr": args.protected_attr,
+        "fairness_threshold": args.fairness_threshold,
+        "fairness_threshold_low": args.fairness_threshold_low,
+        "fairness_threshold_full": args.fairness_threshold_full,
+        "fairness_min_support": args.fairness_min_support,
+        "fairness_min_group_support": args.fairness_min_group_support,
         "positive_label": args.positive_label,
         "perf_direction": args.perf_direction,
         "label_distribution": _label_distribution(
@@ -234,6 +249,8 @@ def main() -> None:
         label_column=args.label_column,
         target_column=args.target_column or args.label_column,
         protected_attr=args.protected_attr or "",
+        fairness_min_support=args.fairness_min_support,
+        fairness_min_group_support=args.fairness_min_group_support,
         dlq_path=dlq_path,
     )
     append_file_to_canonical(state_output, canonical_output)
@@ -255,6 +272,9 @@ def main() -> None:
         epsilon1=args.epsilon1,
         epsilon1_steps=args.epsilon1_steps,
         epsilon2=args.epsilon2,
+        fairness_threshold=args.fairness_threshold,
+        fairness_threshold_low=args.fairness_threshold_low,
+        fairness_threshold_full=args.fairness_threshold_full,
         dlq_path=dlq_path,
     )
     append_file_to_canonical(actions_output, canonical_output)

@@ -151,6 +151,137 @@ class TestPolicyAgent(unittest.TestCase):
             types = [r["action_type"] for r in records]
             self.assertEqual(types, ["defer", "fine_tune", "defer", "fine_tune"])
 
+    def test_fairness_trigger_policy_uses_fairness_core(self):
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            states_path = tmp / "states.jsonl"
+            actions_path = tmp / "actions.jsonl"
+
+            states = [
+                {
+                    "event_type": "state",
+                    "state_id": "s_000001",
+                    "batch_id": "b_000001",
+                    "window_id": "w_000001",
+                    "timestamp": 1.0,
+                    "model_version": "m_000001",
+                    "label_available": False,
+                    "drift_ready": True,
+                    "drift_core": 0.2,
+                    "drift_max": 0.2,
+                    "perf_core": 0.0,
+                    "fairness_core": 0.15,
+                    "fairness_ready": False,
+                    "fairness_support": 40,
+                },
+                {
+                    "event_type": "state",
+                    "state_id": "s_000002",
+                    "batch_id": "b_000002",
+                    "window_id": "w_000002",
+                    "timestamp": 2.0,
+                    "model_version": "m_000001",
+                    "label_available": False,
+                    "drift_ready": True,
+                    "drift_core": 2.0,
+                    "drift_max": 2.0,
+                    "perf_core": 0.0,
+                    "fairness_core": 0.15,
+                    "fairness_ready": True,
+                    "fairness_support": 200,
+                },
+                {
+                    "event_type": "state",
+                    "state_id": "s_000003",
+                    "batch_id": "b_000003",
+                    "window_id": "w_000003",
+                    "timestamp": 3.0,
+                    "model_version": "m_000001",
+                    "label_available": False,
+                    "drift_ready": True,
+                    "drift_core": 0.3,
+                    "drift_max": 0.3,
+                    "perf_core": 0.0,
+                    "fairness_core": 0.05,
+                    "fairness_ready": True,
+                    "fairness_support": 200,
+                },
+            ]
+            states_path.write_text("\n".join(json.dumps(s) for s in states))
+
+            run_policy(
+                states_path=states_path,
+                actions_path=actions_path,
+                policy="fairness_trigger",
+                threshold=1.0,
+                fairness_threshold=0.1,
+                consecutive_k=2,
+            )
+
+            records = [json.loads(line) for line in actions_path.read_text().splitlines()]
+            self.assertEqual(records[0]["action_type"], "defer")
+            self.assertEqual(records[0]["reason"], "fairness_not_ready")
+            self.assertEqual(records[1]["action_type"], "fine_tune")
+            self.assertEqual(records[1]["reason"], "fairness_trigger")
+            self.assertEqual(records[2]["action_type"], "defer")
+            self.assertEqual(records[2]["reason"], "below_fairness_threshold")
+
+    def test_fairness_trigger_can_escalate_to_full_retrain(self):
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            states_path = tmp / "states.jsonl"
+            actions_path = tmp / "actions.jsonl"
+
+            states = [
+                {
+                    "event_type": "state",
+                    "state_id": "s_000001",
+                    "batch_id": "b_000001",
+                    "window_id": "w_000001",
+                    "timestamp": 1.0,
+                    "model_version": "m_000001",
+                    "label_available": False,
+                    "drift_ready": True,
+                    "drift_core": 0.1,
+                    "drift_max": 0.1,
+                    "perf_core": 0.0,
+                    "fairness_core": 0.18,
+                    "fairness_ready": True,
+                    "fairness_support": 250,
+                },
+                {
+                    "event_type": "state",
+                    "state_id": "s_000002",
+                    "batch_id": "b_000002",
+                    "window_id": "w_000002",
+                    "timestamp": 2.0,
+                    "model_version": "m_000001",
+                    "label_available": False,
+                    "drift_ready": True,
+                    "drift_core": 0.1,
+                    "drift_max": 0.1,
+                    "perf_core": 0.0,
+                    "fairness_core": 0.18,
+                    "fairness_ready": True,
+                    "fairness_support": 250,
+                },
+            ]
+            states_path.write_text("\n".join(json.dumps(s) for s in states))
+
+            run_policy(
+                states_path=states_path,
+                actions_path=actions_path,
+                policy="fairness_trigger",
+                fairness_threshold=0.10,
+                fairness_threshold_full=0.15,
+                consecutive_k=2,
+            )
+
+            records = [json.loads(line) for line in actions_path.read_text().splitlines()]
+            self.assertEqual(records[0]["action_type"], "defer")
+            self.assertEqual(records[1]["action_type"], "full_retrain")
+            self.assertEqual(records[1]["reason"], "fairness_full_retrain")
+
 
 if __name__ == "__main__":
     unittest.main()
