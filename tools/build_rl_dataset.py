@@ -5,7 +5,14 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 
-FEATURES = ["drift_core", "drift_max", "drift_ready", "cooldown_active"]
+FEATURES = [
+    "drift_core",
+    "drift_max",
+    "drift_ready",
+    "cooldown_active",
+    "fairness_core",
+    "fairness_ready",
+]
 
 
 def _load_events(path: Path) -> List[Dict]:
@@ -55,6 +62,8 @@ def build_dataset(
     defer_threshold: float,
     perf_field: str,
     perf_direction: str,
+    w_fair: float = 0.0,
+    fairness_field: str = "max_gap",
 ) -> None:
     events = _load_events(events_path)
 
@@ -81,6 +90,8 @@ def build_dataset(
         mae_pre = None
         rmse_pre = None
         r2_pre = None
+        dpd_pre = None
+        eod_pre = None
         if cost:
             accuracy_pre = cost.get("accuracy_pre")
             balanced_accuracy_pre = cost.get("balanced_accuracy_pre")
@@ -88,6 +99,8 @@ def build_dataset(
             mae_pre = cost.get("mae_pre")
             rmse_pre = cost.get("rmse_pre")
             r2_pre = cost.get("r2_pre")
+            dpd_pre = cost.get("dpd_pre")
+            eod_pre = cost.get("eod_pre")
 
         perf_pre = None
         if perf_field == "f1_pre":
@@ -134,6 +147,12 @@ def build_dataset(
             "cooldown_active": (
                 int(bool(state.get("cooldown_active", False))) if state else 0
             ),
+            "fairness_core": (
+                _safe_float(state.get("fairness_core")) if state else 0.0
+            ),
+            "fairness_ready": (
+                int(bool(state.get("fairness_ready", False))) if state else 0
+            ),
             "action_type": action.get("action_type"),
             "accuracy_pre": accuracy_pre if accuracy_pre is not None else "",
             "balanced_accuracy_pre": (
@@ -143,12 +162,23 @@ def build_dataset(
             "mae_pre": mae_pre if mae_pre is not None else "",
             "rmse_pre": rmse_pre if rmse_pre is not None else "",
             "r2_pre": r2_pre if r2_pre is not None else "",
+            "dpd_pre": dpd_pre if dpd_pre is not None else "",
+            "eod_pre": eod_pre if eod_pre is not None else "",
             "perf_pre": perf_pre if perf_pre is not None else "",
             "cost_usd": _safe_float(cost.get("estimated_usd") if cost else 0.0),
             "model_version": action.get("model_version", ""),
             "new_model_version": update.get("new_model_version", "") if update else "",
             "delta_perf": delta_perf,
         }
+        dpd_val = _safe_float(dpd_pre)
+        eod_val = _safe_float(eod_pre)
+        if fairness_field == "dpd_pre":
+            fairness_gap = abs(dpd_val)
+        elif fairness_field == "eod_pre":
+            fairness_gap = abs(eod_val)
+        else:
+            fairness_gap = max(abs(dpd_val), abs(eod_val))
+        row["fairness_gap"] = fairness_gap
         rows.append(row)
         t += 1
 
@@ -171,11 +201,16 @@ def build_dataset(
         pass
 
     c_max = max((r["cost_usd"] for r in rows), default=0.0)
+    fair_max = max((float(r.get("fairness_gap", 0.0)) for r in rows), default=0.0)
     for r in rows:
         if c_max == 0:
             r["cost_norm"] = 0.0
         else:
             r["cost_norm"] = r["cost_usd"] / c_max
+        if fair_max == 0:
+            r["fair_norm"] = 0.0
+        else:
+            r["fair_norm"] = float(r.get("fairness_gap", 0.0)) / fair_max
         reward = r["delta_perf"] - w_cost * r["cost_norm"]
         if r.get("action_type") == "defer" and w_drift > 0.0:
             drift_val = float(r.get("drift_core", 0.0))
@@ -187,6 +222,8 @@ def build_dataset(
             drift_val = float(r.get("drift_core", 0.0))
             if drift_val < defer_threshold:
                 reward += defer_bonus
+        if w_fair > 0.0:
+            reward -= w_fair * float(r.get("fair_norm", 0.0))
         r["reward"] = reward
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +236,8 @@ def build_dataset(
         "drift_max",
         "drift_ready",
         "cooldown_active",
+        "fairness_core",
+        "fairness_ready",
         "action_type",
         "accuracy_pre",
         "balanced_accuracy_pre",
@@ -206,9 +245,13 @@ def build_dataset(
         "mae_pre",
         "rmse_pre",
         "r2_pre",
+        "dpd_pre",
+        "eod_pre",
+        "fairness_gap",
         "perf_pre",
         "cost_usd",
         "cost_norm",
+        "fair_norm",
         "delta_perf",
         "reward",
         "model_version",
@@ -235,6 +278,8 @@ def _print_stats(rows: List[Dict], c_max: float, perf_field: str) -> None:
     ]
     delta_vals = [float(r["delta_perf"]) for r in rows]
     reward_vals = [float(r["reward"]) for r in rows]
+    fair_vals = [float(r.get("fairness_gap", 0.0)) for r in rows]
+    fair_norm_vals = [float(r.get("fair_norm", 0.0)) for r in rows]
 
     def _mean(vals: List[float]) -> float:
         return sum(vals) / len(vals) if vals else 0.0
@@ -255,6 +300,10 @@ def _print_stats(rows: List[Dict], c_max: float, perf_field: str) -> None:
     print(f"delta_perf_std={_std(delta_vals):.4f}")
     print(f"reward_mean={_mean(reward_vals):.4f}")
     print(f"reward_std={_std(reward_vals):.4f}")
+    print(f"fairness_gap_mean={_mean(fair_vals):.4f}")
+    print(f"fairness_gap_std={_std(fair_vals):.4f}")
+    print(f"fair_norm_mean={_mean(fair_norm_vals):.4f}")
+    print(f"fair_norm_std={_std(fair_norm_vals):.4f}")
     print(f"C_max={c_max:.4f}")
 
 
@@ -292,6 +341,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["higher_better", "lower_better"],
         default="higher_better",
     )
+    parser.add_argument("--w-fair", type=float, default=0.0)
+    parser.add_argument(
+        "--fairness-field",
+        choices=["max_gap", "dpd_pre", "eod_pre"],
+        default="max_gap",
+    )
     return parser
 
 
@@ -312,6 +367,8 @@ def main() -> None:
         args.defer_threshold,
         args.perf_field,
         args.perf_direction,
+        args.w_fair,
+        args.fairness_field,
     )
 
 

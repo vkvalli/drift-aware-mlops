@@ -474,3 +474,21 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 - AG News text path currently uses TF-IDF (`feature_mode=tfidf`) only.
 - SBERT embeddings are not implemented in this phase.
 - Fairness diagnostics (`dpd_pre`, `eod_pre`) are evaluation-only and scoped to binary classification behavior on the Adult OpenML benchmark.
+
+
+## Chunk FAIRNESS-STATE-CHECKPOINT-2026-04-10 (2026-04-10T00:00:00-07:00)
+
+### What Changed
+- docs/design_decisions.md
+- docs/experiments_log.md
+- docs/experiments_summary.md
+- docs/implementation-plan.md
+
+### Why It Changed
+- Align docs with the current merged fairness implementation before the next reward-objective change.
+- Make the current boundary explicit: fairness is logged and used by `fairness_trigger`, while LinUCB still optimizes performance+cost reward shaping.
+
+### Scope Clarifications Logged
+- LinUCB does not currently include `dpd_pre`/`eod_pre` as an explicit reward term.
+- Fairness metrics are produced in `CostEvent` and used for evaluation/reporting.
+- Fairness directly drives policy actions only in `fairness_trigger` baseline mode.

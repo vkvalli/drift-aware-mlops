@@ -542,6 +542,44 @@ Metric alignment by task:
 - Airline and AG News: `f1_pre` (imbalanced classification robustness)
 - California Housing: `mae_pre`/`rmse_pre`/`r2_pre` with `lower_better` reward direction for error metrics
 
-Fairness phase scope is evaluation-only:
-- Log `dpd_pre` and `eod_pre` in `CostEvent`
-- No fairness penalty is added to the RL objective in this phase
+Fairness integration status (updated 2026-04-10 / 2026-04-11):
+- Fairness diagnostics remain first-class evaluation signals in `CostEvent` (`dpd_pre`, `eod_pre`).
+- RL reward builder now supports fairness scalarization as an optional term:
+  - `reward -= w_fair * fair_norm`
+  - `fair_norm` is derived from `fairness_gap` (`max(|dpd_pre|, |eod_pre|)` by default, configurable via `--fairness-field`).
+- LinUCB context can now include fairness state features:
+  - `fairness_core`, `fairness_ready` (in addition to drift/cooldown features)
+  - model loader supports both 4-feature legacy and 6-feature fairness-aware vectors.
+- Current thesis lock keeps fairness shaping optional (not forced default) because Step-1 Adult A/B sweeps changed reward values but did not yet change action behavior under conservative evaluation settings.
+- Fairness-trigger policy family remains the deterministic safety/control path for direct fairness-driven actions.
+
+## Current Architecture Lock (2026-04-11)
+
+Active architecture (implemented now):
+- Offline-first event pipeline with append-only JSONL artifacts and deterministic replay.
+- Core chain: `replay -> monitor -> policy_agent -> trainer -> canonical events log`.
+- Event contracts are schema-first and versioned; validation routes bad payloads to DLQ.
+- Primary policy families: `no_retrain`, `fixed_interval`, `threshold_persistence`, `fairness_trigger`, `linucb`.
+- Trainer supports `defer`, `fine_tune`, and `full_retrain` semantics.
+- Multi-task runtime modes: `classification`, `regression`, `text_classification`.
+
+Deployment note:
+- Redis Streams topology remains a documented deployment target.
+- Thesis evidence and reproducible results in this repo are produced from the offline FileBus/JSONL path.
+
+## Design & Architecture Change Log (Chronological)
+
+| Date | Change | Design Impact |
+| --- | --- | --- |
+| 2026-02 | Built offline modular pipeline + canonical JSONL consolidation | Enabled deterministic, reproducible end-to-end experiments without Redis dependency. |
+| 2026-02 | Added schema validation, DLQ, and deterministic replay semantics | Improved reliability, traceability, and idempotent recovery. |
+| 2026-02 | Locked heuristic baseline (`threshold_persistence`) with persistence K | Established cost-control baseline for RL comparisons. |
+| 2026-02 | Upgraded trainer to real incremental learning (SGD) with pre-update evaluation | Made performance signals causal (`evaluate on t`, then train on `t`). |
+| 2026-02 | Introduced RL dataset builder + LinUCB policy path | Enabled learned policy experiments from canonical logs. |
+| 2026-02 | Switched default RL reward from raw to rolling delta | Reduced reward jitter and improved training stability. |
+| 2026-03 | Airline construct-validity switch (`ΔF1` over `Δaccuracy`) | Prevented majority-class bias in imbalanced task reward shaping. |
+| 2026-03 | Added class-weighted updates for airline runs | Improved minority-class sensitivity (F1-oriented improvements). |
+| 2026-03 | Added delayed-label stress suite across Electricity/Airline | Validated policy stability under varying label-lag conditions. |
+| 2026-03 | Added multi-modal task support (regression/text/fairness benchmark) | Generalized architecture beyond one tabular dataset. |
+| 2026-04 | Fairness Step-1 in RL (`w_fair`, `fairness_gap`, `fair_norm`, fairness-aware features) | Fairness objective became executable in RL pipeline; currently optional pending stronger behavior-identifiability evidence. |
+
