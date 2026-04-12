@@ -14,6 +14,25 @@ from src.utils.ids import IdCounter
 import pickle
 
 
+def _linucb_features(state: Dict, n_features: int):
+    import numpy as np
+
+    full = [
+        float(state.get("drift_core", 0.0)),
+        float(state.get("drift_max", 0.0)),
+        1.0 if state.get("drift_ready", False) else 0.0,
+        1.0 if state.get("cooldown_active", False) else 0.0,
+        float(state.get("fairness_core", 0.0)),
+        1.0 if state.get("fairness_ready", False) else 0.0,
+    ]
+    if n_features <= 0:
+        n_features = len(full)
+    if n_features <= len(full):
+        return np.array(full[:n_features], dtype=float)
+    padded = full + [0.0] * (n_features - len(full))
+    return np.array(padded, dtype=float)
+
+
 def _load_state_events(path: Path, dlq_path: Path) -> List[Dict]:
     records: List[Dict] = []
     for line in path.read_text().splitlines():
@@ -93,17 +112,8 @@ def run_policy(
                     reason = "linucb_epsilon"
                 else:
                     try:
-                        import numpy as np
-
-                        features = np.array(
-                            [
-                                float(state.get("drift_core", 0.0)),
-                                float(state.get("drift_max", 0.0)),
-                                1.0 if state.get("drift_ready", False) else 0.0,
-                                1.0 if state.get("cooldown_active", False) else 0.0,
-                            ],
-                            dtype=float,
-                        )
+                        n_features = int(getattr(linucb, "n_features", 0) or 0)
+                        features = _linucb_features(state, n_features)
                         action_type = linucb.choose_action(features)
                         reason = "linucb_policy"
                     except Exception:

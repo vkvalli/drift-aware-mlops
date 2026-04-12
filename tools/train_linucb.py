@@ -9,7 +9,14 @@ import numpy as np
 from src.rl.linucb import ACTIONS, LinUCB
 
 
-FEATURES = ["drift_core", "drift_max", "drift_ready", "cooldown_active"]
+FEATURES = [
+    "drift_core",
+    "drift_max",
+    "drift_ready",
+    "cooldown_active",
+    "fairness_core",
+    "fairness_ready",
+]
 
 
 def _load_rows(path: Path) -> List[Dict]:

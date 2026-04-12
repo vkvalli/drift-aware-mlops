@@ -16,6 +16,7 @@
 **Changelog:** 2026-02-06 — Added CI/hooks, schema-first enforcement, structured logging, deterministic seeds, healthchecks, debug endpoints, and --max-rows subset mode.
 **Changelog:** 2026-03-06 — Added multi-modal extension phase (regression + text + fairness eval), thesis-ready chunk changelog guardrail, and thesis-review-build freeze workflow.
 **Changelog:** 2026-03-07 — Clarified implementation scope: AG News text path is TF-IDF-only (no SBERT yet), and Adult fairness diagnostics are binary-classification scoped.
+**Changelog:** 2026-04-10 — Recorded current fairness state: `dpd_pre`/`eod_pre` are evaluation diagnostics; LinUCB reward remains performance+cost shaped until explicit fairness-term rollout.
 
 ---
 
