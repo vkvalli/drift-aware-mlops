@@ -24,7 +24,8 @@ class LinUCB:
         for action in ACTIONS:
             A_inv = np.linalg.inv(self.A[action])
             theta = A_inv @ self.b[action]
-            mean = float(theta.T @ x)
-            bonus = self.alpha * float(np.sqrt(x.T @ A_inv @ x))
+            # Use .item() for 1x1 arrays to stay compatible across NumPy versions.
+            mean = float((theta.T @ x).item())
+            bonus = self.alpha * float(np.sqrt((x.T @ A_inv @ x).item()))
             scores[action] = mean + bonus
         return max(scores, key=scores.get)
