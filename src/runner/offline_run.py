@@ -105,16 +105,36 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-column", type=str, default=None)
     parser.add_argument("--positive-label", type=str, default="UP")
     parser.add_argument("--protected-attr", type=str, default=None)
-    parser.add_argument("--fairness-threshold", type=float, default=0.1,
-                        help="DPD proxy threshold for fairness_trigger policy")
-    parser.add_argument("--fairness-threshold-low", type=float, default=None,
-                        help="Lower hysteresis threshold for fairness_trigger policy")
-    parser.add_argument("--fairness-threshold-full", type=float, default=None,
-                        help="High-severity DPD proxy threshold for fairness-triggered full retrain")
-    parser.add_argument("--fairness-min-support", type=int, default=200,
-                        help="Minimum lagged labeled support before fairness trigger becomes active")
-    parser.add_argument("--fairness-min-group-support", type=int, default=50,
-                        help="Minimum lagged labeled support per group before fairness trigger becomes active")
+    parser.add_argument(
+        "--fairness-threshold",
+        type=float,
+        default=0.1,
+        help="DPD proxy threshold for fairness_trigger policy",
+    )
+    parser.add_argument(
+        "--fairness-threshold-low",
+        type=float,
+        default=None,
+        help="Lower hysteresis threshold for fairness_trigger policy",
+    )
+    parser.add_argument(
+        "--fairness-threshold-full",
+        type=float,
+        default=None,
+        help="High-severity DPD proxy threshold for fairness-triggered full retrain",
+    )
+    parser.add_argument(
+        "--fairness-min-support",
+        type=int,
+        default=200,
+        help="Minimum lagged labeled support before fairness trigger becomes active",
+    )
+    parser.add_argument(
+        "--fairness-min-group-support",
+        type=int,
+        default=50,
+        help="Minimum lagged labeled support per group before fairness trigger becomes active",
+    )
     parser.add_argument(
         "--perf-direction", choices=["higher_better", "lower_better"], default=None
     )
@@ -133,6 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dlq", type=str, default="artifacts/dlq.jsonl")
     parser.add_argument("--enable-shadow-buffer", action="store_true")
     parser.add_argument("--shadow-batches", type=int, default=2)
+    parser.add_argument("--fine-tune-window-batches", type=int, default=1)
     parser.add_argument("--retrain-window-batches", type=int, default=5)
     parser.add_argument("--clean-artifacts", action="store_true")
     return parser
@@ -292,6 +313,7 @@ def main() -> None:
         positive_label=args.positive_label,
         window_size=args.window_size,
         shadow_batch_ids=shadow_batch_ids,
+        fine_tune_window_batches=args.fine_tune_window_batches,
         retrain_window_batches=args.retrain_window_batches,
         task=args.task,
         feature_mode=args.feature_mode,

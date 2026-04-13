@@ -516,6 +516,7 @@ def run_trainer(
     positive_label: str = "UP",
     window_size: int = 10,
     shadow_batch_ids: Optional[List[str]] = None,
+    fine_tune_window_batches: int = 1,
     retrain_window_batches: int = 5,
     task: str = "classification",
     feature_mode: str = "tabular",
@@ -592,50 +593,68 @@ def run_trainer(
         shadow_accuracy_pre = None
         shadow_accuracy_post = None
         delta_shadow = 0.0
-        X_batch_raw: List = []
-        y_batch: List[float] = []
-        g_batch: List[str] = []
+        X_eval_raw: List = []
+        y_eval: List[float] = []
+        g_eval: List[str] = []
+        X_train_raw: List = []
+        y_train: List[float] = []
+        g_train: List[str] = []
         model = None
         vectorizer = None
         pending_update: Optional[ModelUpdateEvent] = None
 
         if csv_path and rows_x and label_available:
             if batch_id:
+                # Evaluate on the current batch for causal comparability.
+                cur_sl = _batch_slice(batch_id, window_size)
+                X_eval_raw = rows_x[cur_sl]
+                y_eval = rows_y[cur_sl]
+                g_eval = groups[cur_sl]
+                eval_slice_start = cur_sl.start or 0
+                X_eval_raw, y_eval, g_eval = _filter_shadow_rows_from_slice(
+                    X_eval_raw,
+                    y_eval,
+                    g_eval,
+                    eval_slice_start,
+                    window_size,
+                    shadow_batch_ids_set,
+                )
+
+                # Train on an action-specific rolling slice.
+                end_row = cur_sl.stop or len(rows_x)
                 if action_type == "full_retrain":
-                    cur_sl = _batch_slice(batch_id, window_size)
-                    end_row = cur_sl.stop or len(rows_x)
-                    retrain_batches = max(1, int(retrain_window_batches))
-                    start_row = max(0, end_row - (retrain_batches * window_size))
-                    X_batch_raw = rows_x[start_row:end_row]
-                    y_batch = rows_y[start_row:end_row]
-                    g_batch = groups[start_row:end_row]
-                    slice_start = start_row
+                    train_batches = max(1, int(retrain_window_batches))
+                elif action_type == "fine_tune":
+                    train_batches = max(1, int(fine_tune_window_batches))
                 else:
-                    sl = _batch_slice(batch_id, window_size)
-                    X_batch_raw = rows_x[sl]
-                    y_batch = rows_y[sl]
-                    g_batch = groups[sl]
-                    slice_start = sl.start or 0
-                X_batch_raw, y_batch, g_batch = _filter_shadow_rows_from_slice(
-                    X_batch_raw,
-                    y_batch,
-                    g_batch,
-                    slice_start,
+                    train_batches = 1
+                train_start = max(0, end_row - (train_batches * window_size))
+                X_train_raw = rows_x[train_start:end_row]
+                y_train = rows_y[train_start:end_row]
+                g_train = groups[train_start:end_row]
+                X_train_raw, y_train, g_train = _filter_shadow_rows_from_slice(
+                    X_train_raw,
+                    y_train,
+                    g_train,
+                    train_start,
                     window_size,
                     shadow_batch_ids_set,
                 )
             else:
-                X_batch_raw = list(rows_x)
-                y_batch = list(rows_y)
-                g_batch = list(groups)
-                X_batch_raw, y_batch, g_batch = _filter_shadow_rows_from_slice(
-                    X_batch_raw,
-                    y_batch,
-                    g_batch,
+                X_eval_raw = list(rows_x)
+                y_eval = list(rows_y)
+                g_eval = list(groups)
+                X_eval_raw, y_eval, g_eval = _filter_shadow_rows_from_slice(
+                    X_eval_raw,
+                    y_eval,
+                    g_eval,
                     0,
                     window_size,
                     shadow_batch_ids_set,
                 )
+                X_train_raw = list(X_eval_raw)
+                y_train = list(y_eval)
+                g_train = list(g_eval)
 
             model_path = Path(
                 f"artifacts/models/{current_model_version or 'm_000000'}.pkl"
@@ -644,26 +663,19 @@ def run_trainer(
             if model is None:
                 model = create_model(seed, task=task)
 
-            X_batch = X_batch_raw
+            X_eval = X_eval_raw
             if feature_mode == "tfidf" or task == "text_classification":
                 vec_path = _vectorizer_path(current_model_version or "m_000000")
                 vectorizer = _load_vectorizer(vec_path)
-                if vectorizer is None and TfidfVectorizer is not None:
+                fit_text = X_train_raw if X_train_raw else X_eval_raw
+                if vectorizer is None and TfidfVectorizer is not None and fit_text:
                     vectorizer = TfidfVectorizer(max_features=5000)
-                    X_batch = (
-                        vectorizer.fit_transform([str(x) for x in X_batch_raw])
-                        if X_batch_raw
-                        else X_batch_raw
-                    )
-                elif vectorizer is not None:
-                    X_batch = (
-                        vectorizer.transform([str(x) for x in X_batch_raw])
-                        if X_batch_raw
-                        else X_batch_raw
-                    )
-            model = _compatible_model_for_batch(model, X_batch, seed, task)
+                    vectorizer.fit([str(x) for x in fit_text])
+                if vectorizer is not None and X_eval_raw:
+                    X_eval = vectorizer.transform([str(x) for x in X_eval_raw])
+            model = _compatible_model_for_batch(model, X_eval, seed, task)
 
-            pre_metrics = _predict_metrics(model, X_batch, y_batch, task, g_batch)
+            pre_metrics = _predict_metrics(model, X_eval, y_eval, task, g_eval)
             if pre_metrics is not None:
                 accuracy_pre = pre_metrics.get("accuracy")
                 balanced_accuracy_pre = pre_metrics.get("balanced_accuracy")
@@ -768,24 +780,21 @@ def run_trainer(
                 if model is None:
                     model = create_model(seed, task=task)
 
-                X_batch_train = X_batch_raw
+                X_batch_train = X_train_raw
                 if feature_mode == "tfidf" or task == "text_classification":
-                    if vectorizer is None and TfidfVectorizer is not None:
+                    fit_text = X_train_raw if X_train_raw else X_eval_raw
+                    if vectorizer is None and TfidfVectorizer is not None and fit_text:
                         vectorizer = TfidfVectorizer(max_features=5000)
+                        vectorizer.fit([str(x) for x in fit_text])
+                    if vectorizer is not None and X_train_raw:
                         X_batch_train = (
-                            vectorizer.fit_transform([str(x) for x in X_batch_raw])
-                            if X_batch_raw
-                            else X_batch_raw
-                        )
-                    elif vectorizer is not None:
-                        X_batch_train = (
-                            vectorizer.transform([str(x) for x in X_batch_raw])
-                            if X_batch_raw
-                            else X_batch_raw
+                            vectorizer.transform([str(x) for x in X_train_raw])
+                            if X_train_raw
+                            else X_train_raw
                         )
 
-                if model is not None and X_batch_train is not None and len(y_batch) > 0:
-                    eval_summary = {"n_samples": len(y_batch)}
+                if model is not None and X_batch_train is not None and len(y_train) > 0:
+                    eval_summary = {"n_samples": len(y_eval)}
                     if accuracy_pre is not None:
                         eval_summary["accuracy"] = float(accuracy_pre)
                     if balanced_accuracy_pre is not None:
@@ -812,10 +821,10 @@ def run_trainer(
                         train_model = create_model(seed, task=task)
 
                     if train_model is not None:
-                        sample_weight = _compute_sample_weights(y_batch, task)
+                        sample_weight = _compute_sample_weights(y_train, task)
                         if task == "regression":
                             train_model.partial_fit(
-                                X_batch_train, y_batch, sample_weight=sample_weight
+                                X_batch_train, y_train, sample_weight=sample_weight
                             )
                         else:
                             class_values = (
@@ -824,14 +833,14 @@ def run_trainer(
                             if not hasattr(train_model, "classes_"):
                                 train_model.partial_fit(
                                     X_batch_train,
-                                    [int(v) for v in y_batch],
+                                    [int(v) for v in y_train],
                                     classes=class_values,
                                     sample_weight=sample_weight,
                                 )
                             else:
                                 train_model.partial_fit(
                                     X_batch_train,
-                                    [int(v) for v in y_batch],
+                                    [int(v) for v in y_train],
                                     sample_weight=sample_weight,
                                 )
 
@@ -960,6 +969,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--positive-label", default="UP")
     parser.add_argument("--window-size", type=int, default=10)
     parser.add_argument("--shadow-batch-ids", default="")
+    parser.add_argument("--fine-tune-window-batches", type=int, default=1)
     parser.add_argument("--retrain-window-batches", type=int, default=5)
     parser.add_argument(
         "--task",
@@ -991,6 +1001,7 @@ def main() -> None:
         positive_label=args.positive_label,
         window_size=args.window_size,
         shadow_batch_ids=[x for x in args.shadow_batch_ids.split(",") if x],
+        fine_tune_window_batches=args.fine_tune_window_batches,
         retrain_window_batches=args.retrain_window_batches,
         task=args.task,
         feature_mode=args.feature_mode,

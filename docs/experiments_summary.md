@@ -14,6 +14,7 @@ For the full chronological history and all run folders, see `docs/experiments_lo
 | M5 | Delayed-label stress suite | `runs/delay_stress_summary.csv` | Stable behavior across delays with conservative calibration. |
 | M6 | Multi-modal smoke extension | `runs/matrix_20260306_023101/summary.csv`, `runs/matrix_20260306_024457/summary.csv`, `runs/matrix_20260306_024630/summary.csv` | Regression/text/fairness-eval paths run end-to-end. |
 | M7 | RL fairness term integration (Step 1) | `runs/adult_rl_wfair_sweep_20260410_161019/wfair_sweep_summary.csv`, `runs/adult_rl_step1_compare_20260410_165138/step1_comparison.csv`, `runs/adult_rl_covboost_20260410_173352/coverage_boost_ab_summary.csv` | Fairness-aware reward implemented and measurable, but no action-policy shift yet under conservative eval schedule. |
+| M8 | AG News real-data calibration + stronger fine-tune updates | `runs/matrix_20260412_233030/summary.csv`, `runs/matrix_20260412_233503/summary.csv` | TF-IDF text path validated on real AG News; RL reaches near-parity F1 with lower cost by improving update effectiveness. |
 
 ## 2) Locked Decisions
 
@@ -22,6 +23,8 @@ For the full chronological history and all run folders, see `docs/experiments_lo
 - Exploration schedule (locked airline operating point): `warm_start_n=20`, `warm_start_k=8`, `epsilon1=0.02`, `epsilon1_steps=30`, `epsilon2=0.02`
 - Coverage gate: `mean update_count >= 8`
 - Fairness in RL reward: implemented as optional term (`w_fair * fair_norm`), not locked as mandatory default.
+- AG News update-effectiveness lock: `fine_tune_window_batches=3` (train each fine-tune on recent 3 batches).
+- AG News RL operating point (cost-efficient): `epsilon2=0.22`, `fine_tune_window_batches=3` (near fixed-interval F1 at lower cost).
 
 ## 3) Final Airline Comparison (120k, 3 seeds)
 
@@ -54,7 +57,7 @@ Source: `runs/adult_rl_covboost_20260410_173352/coverage_boost_ab_summary.csv`
 | nofair | 0.0217 | 4.33 | 6.50 | 0.3472 | 0.0065 | 0.0132 | -0.0163 |
 | wfair1 | 0.0217 | 4.33 | 6.50 | 0.3472 | 0.0065 | 0.0132 | -0.1016 |
 
-Interpretation: Step-1 fairness term is operational (reward changes), but policy behavior remained unchanged under the current conservative evaluation schedule. This is reported as an identifiability/coverage result, not a wiring failure.
+Interpretation: Step-1 fairness term is operational (reward changes), but policy behavior remained unchanged under the current conservative evaluation schedule. This is reported as an identifiability/coverage result, not a wiring failure. Fairness conclusions in this phase are therefore framed around reliable fairness observability and lower-cost controlled operation, not tiny F1 deltas.
 
 ## 5) Delayed-Label Stress (Cross-Dataset)
 
@@ -72,3 +75,19 @@ Source: `runs/delay_stress_summary.csv`
 - Text mode is TF-IDF based in this phase (`feature_mode=tfidf`); SBERT is not implemented.
 - Fairness metrics (`dpd_pre`, `eod_pre`) are benchmarked on binary classification (Adult) and should not be over-claimed as multiclass/regression fairness guarantees.
 - Full run-by-run chronology and superseded calibrations are intentionally kept in `docs/experiments_log.md`.
+
+## 7) AG News Real-Data Policy Lock (60k, 3 seeds)
+
+Source artifacts:
+- Baselines (`fine_tune_window_batches=3`): `runs/matrix_20260412_233030/summary.csv`
+- RL cost-efficient point: `runs/matrix_20260412_233503/summary.csv`
+- RL higher-budget point: `runs/matrix_20260413_000038/summary.csv`
+
+| Policy / Config | Mean Updates | Mean Action Rate | Mean Cost (USD) | Mean Accuracy | Mean F1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| fixed_interval (N=10, ftw=3) | 30.00 | 0.1000 | 45.00 | 0.8471 | 0.8409 |
+| threshold_persistence (T=0.26, K=7, ftw=3) | 31.00 | 0.1033 | 46.50 | 0.8274 | 0.8158 |
+| linucb (`epsilon2=0.22`, ftw=3) | 25.00 | 0.0833 | 37.50 | 0.8461 | 0.8406 |
+| linucb (`epsilon2=0.26`, ftw=3) | 31.00 | 0.1033 | 46.50 | 0.8457 | 0.8402 |
+
+Interpretation: on real AG News, stronger fine-tune updates (`ftw=3`) materially increase policy quality. The RL cost-efficient operating point (`epsilon2=0.22`) reaches near-parity F1 with fixed interval while using lower action rate and lower cost.

@@ -622,6 +622,32 @@ Interpretation:
 - text path is wired end-to-end and no longer produces degenerate drift.
 - monitor patch now uses both document-length shift and entropy shift in text `drift_core`, yielding non-constant post-warmup drift.
 
+### AG News (Real Dataset Calibration + RL Lock, 2026-04-12)
+
+Setup (real-data path):
+- dataset prep: `data/ag_news_real.csv` from Hugging Face AG News via `tools/prepare_ag_news.py --source hf`
+- task: `text_classification` with `feature_mode=tfidf`
+- update-effectiveness change: `fine_tune_window_batches=3` (train each fine-tune on recent 3 batches)
+- windowing: `window_size=200`, `max_rows=60000`, seeds `111,222,333`
+
+Artifacts:
+- tuned baselines (`ftw=3`): `runs/matrix_20260412_233030/summary.csv`
+- RL cost-efficient lock: `runs/matrix_20260412_233503/summary.csv`
+- RL matched-budget check: `runs/matrix_20260413_000038/summary.csv`
+
+| Policy / Config | Mean Updates | Mean Action Rate | Mean Cost (USD) | Mean Accuracy | Mean F1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| no_retrain | 0.00 | 0.0000 | 0.00 | 0.2509 | 0.1000 |
+| fixed_interval (N=10, ftw=3) | 30.00 | 0.1000 | 45.00 | 0.8471 | 0.8409 |
+| threshold_persistence (T=0.26, K=7, ftw=3) | 31.00 | 0.1033 | 46.50 | 0.8274 | 0.8158 |
+| linucb (`epsilon2=0.22`, ftw=3) | 25.00 | 0.0833 | 37.50 | 0.8461 | 0.8406 |
+| linucb (`epsilon2=0.26`, ftw=3) | 31.00 | 0.1033 | 46.50 | 0.8457 | 0.8402 |
+
+Interpretation:
+- stronger fine-tune updates (`ftw=3`) substantially improved AG text F1 for update policies.
+- RL reaches near-parity F1 with fixed interval while operating at lower action rate and lower cost (`epsilon2=0.22`).
+- at matched budget (`epsilon2=0.26`), RL remains competitive on F1/accuracy.
+
 ### Adult (Fairness Evaluation Benchmark)
 
 Setup:
@@ -694,6 +720,7 @@ Interpretation (current state):
 - Under the current conservative evaluation schedule, fairness penalty did **not** change LinUCB action patterns yet (same updates/action-rate/cost/F1/DPD/EOD in A/B).
 - This is treated as an identifiability/coverage finding, not a pipeline bug; fairness optimization remains an extension track.
 - For thesis claims today: fairness is robustly logged and analyzable; fairness-trigger policies can enforce fairness-aware actions; RL fairness term is implemented as optional shaping but not locked as a behavior-changing default.
+- Framing note: fairness contribution in this phase is about controllable fairness observability and lower-cost policy operation under fairness diagnostics, not about claiming significance from tiny F1 shifts.
 <!-- FAIRNESS_RL_STEP1_END -->
 
 <!-- COMPLETE_RUN_REGISTRY_START -->

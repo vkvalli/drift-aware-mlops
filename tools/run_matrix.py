@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epsilon2", type=float, default=0.01)
     parser.add_argument("--enable-shadow-buffer", action="store_true")
     parser.add_argument("--shadow-batches", type=int, default=2)
+    parser.add_argument("--fine-tune-window-batches", type=int, default=1)
     parser.add_argument("--retrain-window-batches", type=int, default=5)
     return parser
 
@@ -192,6 +193,8 @@ def _run_single(
             str(args.epsilon2),
             "--shadow-batches",
             str(args.shadow_batches),
+            "--fine-tune-window-batches",
+            str(args.fine_tune_window_batches),
             "--retrain-window-batches",
             str(args.retrain_window_batches),
             "--seed",
