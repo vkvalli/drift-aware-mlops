@@ -1,229 +1,162 @@
-# Drift-Aware MLOps
+# Drift-Aware MLOps (Offline-First)
 
-Offline, event-driven retraining framework with deterministic replay, baseline policies, and RL policy support.
+An offline-first, event-driven MLOps research system for drift-aware retraining under delayed labels, with baseline policies and a lightweight RL agent (LinUCB).
 
-Current state (v2.0.1):
-- End-to-end offline chain is working: `replay -> monitor -> policy -> trainer -> logger`
-- Task modes: `classification`, `regression`, `text_classification`
-- Datasets validated in smoke/matrix runs:
-  - Electricity (classification)
-  - Airline Delay (classification + fairness eval fields)
-  - California Housing (regression)
-  - AG News (text classification)
-  - Adult from OpenML (fairness evaluation benchmark)
+## Current Status (v2.2)
 
-## Setup
+- Stable offline pipeline with canonical event logging
+- Multi-task support:
+  - `classification`
+  - `regression`
+  - `text_classification`
+- Baselines + RL are implemented and evaluated
+- AG News real-data path is calibrated (TF-IDF)
+- Fairness metrics are integrated as evaluation signals (Adult demo scope)
+
+## Architecture (Current)
+
+The orchestrated flow is:
+
+`Replay/Ingestion -> Monitor -> Policy Agent -> Trainer -> Canonical Logger`
+
+Each stage writes modular outputs, and the run is consolidated into one canonical log:
+
+- `artifacts/events.jsonl` (ordered canonical trace)
+- `artifacts/dlq.jsonl` (invalid-schema/error events)
+- `artifacts/checkpoints/` (checkpoint/resume metadata where applicable)
+
+## Event Model (Canonical)
+
+The system logs structured event types:
+
+- `batch`
+- `state`
+- `action`
+- `cost`
+- `model_update`
+- `run_meta` (header/metadata line)
+
+IDs are deterministic and seeded for reproducibility (`b_`, `s_`, `a_`, `c_`, `u_`, `m_`).
+
+## Policies
+
+Implemented policy families:
+
+- `no_retrain`
+- `fixed_interval`
+- `threshold_persistence`
+- `fairness_trigger`
+- `linucb`
+
+Trainer action semantics:
+
+- `defer`
+- `fine_tune`
+- `full_retrain`
+
+## Tasks + Metrics
+
+### Classification
+- Metrics include `accuracy`, optional `balanced_accuracy`, `f1`
+- Electricity and Airline experiments are supported
+
+### Regression
+- Metrics include `mae_pre`, `rmse_pre`, `r2_pre`
+- California Housing path is supported
+
+### Text Classification
+- Feature mode: `tfidf`
+- AG News real dataset path is supported
+- Note: SBERT is not implemented in this release
+
+### Fairness (Evaluation Scope)
+- Fairness signals logged as `dpd_pre`, `eod_pre`
+- Adult fairness demo is scoped to binary classification evaluation
+
+## Quickstart
+
+Use your project virtual environment (recommended).
+
+### 1) Run a single offline pipeline
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-.venv/bin/python -m pip install -r requirements-dev.txt
+python -m src.runner.offline_run \
+  --csv data/electricity-normalized.csv \
+  --task classification \
+  --label-column class \
+  --window-size 200 \
+  --max-rows 5000 \
+  --label-delay-batches 2 \
+  --ref-window 3 \
+  --policy threshold_persistence \
+  --threshold 0.01 \
+  --consecutive-k 3 \
+  --seed 111 \
+  --clean-artifacts \
+  --canonical-output artifacts/events.jsonl
+```
+### 2) Summarize + plot a run
+
+```bash
+python tools/summarize_run.py --events artifacts/events.jsonl --out artifacts/run_summary.txt
+python tools/plot_run.py --events artifacts/events.jsonl --outdir artifacts/plots
 ```
 
-Run tests:
+### 3) Run a policy matrix
 
+```bash
+python -m tools.run_matrix \
+  --csv data/electricity-normalized.csv \
+  --task classification \
+  --label-column class \
+  --window-size 200 \
+  --max-rows 20000 \
+  --label-delay-batches 2 \
+  --ref-window 3 \
+  --seeds 111,222,333 \
+  --policies no_retrain,fixed_interval,threshold_persistence,linucb
+```
+
+```bash
+LATEST_MATRIX="$(ls -td runs/matrix_* | head -n 1)"
+python tools/aggregate_matrix.py --matrix-dir "$LATEST_MATRIX" --out "$LATEST_MATRIX/summary.csv"
+```
+
+## Dataset Preparation Helpers
+Examples:
+
+```bash
+python tools/prepare_california_housing.py --out data/california_housing.csv
+python tools/prepare_ag_news.py --source hf --out data/ag_news_real.csv --rows 60000 --seed 42
+python tools/prepare_adult.py --out data/adult.csv --protected-attr sex
+```
+
+## Reproducibility Notes
+
+Implemented policy families:
+
+- Use fixed seeds for deterministic IDs and reproducible runs
+- Normalize logged_at precision in deterministic comparisons
+- Keep one run per folder under runs/ (no overwrite)
+- Use .venv for consistent dependency behavior locally and in tests
+
+## Testing
+
+Run full tests in your virtual environment:
 ```bash
 .venv/bin/python -m unittest
 ```
 
-## Core CLI
+## Scope Notes (Important)
 
-Main runner:
+- Offline-first canonical pipeline is the primary supported mode
+- Redis stream architecture remains a planned/extendable path, not the default runtime
+- Fairness integration is operational and logged; claims are scoped to implemented evaluation settings
+- Text path uses TF-IDF in this version
 
-```bash
-.venv/bin/python -m src.runner.offline_run --help
-```
+## Docs
 
-Matrix runner:
-
-```bash
-.venv/bin/python -m tools.run_matrix --help
-```
-
-## Quick Start: Single Run
-
-Always write run outputs to a unique `runs/<name>` folder.
-
-### 1) Classification (Electricity)
-
-```bash
-RUN_ID="elec_smoke_$(date +%Y%m%d_%H%M%S)"
-RUN_DIR="runs/$RUN_ID"
-mkdir -p "$RUN_DIR"
-
-.venv/bin/python -m src.runner.offline_run \
-  --csv data/electricity-normalized.csv \
-  --task classification \
-  --label-column class \
-  --target-column class \
-  --dataset-id electricity \
-  --window-size 200 \
-  --max-rows 40000 \
-  --label-delay-batches 2 \
-  --seed 111 \
-  --replay-output "$RUN_DIR/replay.jsonl" \
-  --state-output "$RUN_DIR/state.jsonl" \
-  --actions-output "$RUN_DIR/actions.jsonl" \
-  --trainer-output "$RUN_DIR/trainer_output.jsonl" \
-  --canonical-output "$RUN_DIR/events.jsonl" \
-  --processed-index-file "$RUN_DIR/processed_actions.jsonl" \
-  --dlq "$RUN_DIR/dlq.jsonl"
-```
-
-### 2) Regression (California Housing)
-
-```bash
-.venv/bin/python tools/prepare_california_housing.py --out data/california_housing.csv
-
-RUN_ID="california_smoke_$(date +%Y%m%d_%H%M%S)"
-RUN_DIR="runs/$RUN_ID"
-mkdir -p "$RUN_DIR"
-
-.venv/bin/python -m src.runner.offline_run \
-  --csv data/california_housing.csv \
-  --task regression \
-  --label-column MedHouseVal \
-  --target-column MedHouseVal \
-  --perf-direction lower_better \
-  --dataset-id california_housing \
-  --window-size 200 \
-  --max-rows 40000 \
-  --label-delay-batches 2 \
-  --seed 111 \
-  --replay-output "$RUN_DIR/replay.jsonl" \
-  --state-output "$RUN_DIR/state.jsonl" \
-  --actions-output "$RUN_DIR/actions.jsonl" \
-  --trainer-output "$RUN_DIR/trainer_output.jsonl" \
-  --canonical-output "$RUN_DIR/events.jsonl" \
-  --processed-index-file "$RUN_DIR/processed_actions.jsonl" \
-  --dlq "$RUN_DIR/dlq.jsonl"
-```
-
-### 3) Text Classification (AG News)
-
-```bash
-.venv/bin/python tools/prepare_ag_news.py --out data/ag_news.csv --rows 60000
-
-RUN_ID="agnews_smoke_$(date +%Y%m%d_%H%M%S)"
-RUN_DIR="runs/$RUN_ID"
-mkdir -p "$RUN_DIR"
-
-.venv/bin/python -m src.runner.offline_run \
-  --csv data/ag_news.csv \
-  --task text_classification \
-  --feature-mode tfidf \
-  --label-column class \
-  --dataset-id ag_news \
-  --window-size 200 \
-  --max-rows 40000 \
-  --label-delay-batches 2 \
-  --seed 111 \
-  --replay-output "$RUN_DIR/replay.jsonl" \
-  --state-output "$RUN_DIR/state.jsonl" \
-  --actions-output "$RUN_DIR/actions.jsonl" \
-  --trainer-output "$RUN_DIR/trainer_output.jsonl" \
-  --canonical-output "$RUN_DIR/events.jsonl" \
-  --processed-index-file "$RUN_DIR/processed_actions.jsonl" \
-  --dlq "$RUN_DIR/dlq.jsonl"
-```
-
-### 4) Fairness Eval Benchmark (Adult from OpenML)
-
-```bash
-.venv/bin/python tools/prepare_adult.py --out data/adult.csv --target-column income --rows 60000
-
-RUN_ID="adult_openml_smoke_$(date +%Y%m%d_%H%M%S)"
-RUN_DIR="runs/$RUN_ID"
-mkdir -p "$RUN_DIR"
-
-.venv/bin/python -m src.runner.offline_run \
-  --csv data/adult.csv \
-  --task classification \
-  --label-column income \
-  --target-column income \
-  --protected-attr sex \
-  --dataset-id adult_openml \
-  --window-size 200 \
-  --max-rows 40000 \
-  --label-delay-batches 2 \
-  --seed 111 \
-  --replay-output "$RUN_DIR/replay.jsonl" \
-  --state-output "$RUN_DIR/state.jsonl" \
-  --actions-output "$RUN_DIR/actions.jsonl" \
-  --trainer-output "$RUN_DIR/trainer_output.jsonl" \
-  --canonical-output "$RUN_DIR/events.jsonl" \
-  --processed-index-file "$RUN_DIR/processed_actions.jsonl" \
-  --dlq "$RUN_DIR/dlq.jsonl"
-```
-
-## Plots + Run Summary
-
-```bash
-.venv/bin/python tools/plot_run.py --events "$RUN_DIR/events.jsonl" --outdir "$RUN_DIR/plots"
-.venv/bin/python tools/summarize_run.py --events "$RUN_DIR/events.jsonl" --out "$RUN_DIR/run_summary.txt"
-```
-
-## Matrix Runs (Baselines)
-
-```bash
-.venv/bin/python -m tools.run_matrix \
-  --csv data/electricity-normalized.csv \
-  --task classification \
-  --label-column class \
-  --target-column class \
-  --window-size 200 \
-  --max-rows 60000 \
-  --label-delay-batches 2 \
-  --ref-window 3 \
-  --seeds 111,222,333 \
-  --policies no_retrain,fixed_interval,threshold_persistence
-```
-
-Aggregate:
-
-```bash
-LATEST_MATRIX="$(ls -td runs/matrix_* | head -n 1)"
-.venv/bin/python tools/aggregate_matrix.py --matrix-dir "$LATEST_MATRIX" --out "$LATEST_MATRIX/summary.csv"
-```
-
-## Registry Logger + Deterministic Replay
-
-Registry logger:
-
-```bash
-.venv/bin/python -m services.registry_logger.main \
-  --input runs/<run>/trainer_output.jsonl \
-  --canonical runs/<run>/events.jsonl \
-  --checkpoint runs/<run>/checkpoints/registry_logger.json \
-  --dlq runs/<run>/dlq.jsonl
-```
-
-Replay tool:
-
-```bash
-.venv/bin/python -m tools.replay \
-  --source runs/<run>/events.jsonl \
-  --out runs/<run>/replay_out.jsonl \
-  --from-id state:s_000010 \
-  --to-id action:a_000120 \
-  --deterministic
-```
-
-## Thesis Logging Guardrail
-
-Append chunk-level implementation notes to `docs/research_log.md`:
-
-```bash
-.venv/bin/python tools/log_chunk_update.py --help
-```
-
-## Where Results Live
-
-- Rolling experiment details: `docs/experiments_log.md`
-- Final condensed tables: `docs/experiments_summary.md`
-- Architecture and metric rationale: `docs/design_decisions.md`
-
-## Branch Policy
-
-- `main`: active development
-- `thesis-review-build`: review-safe snapshot branch
+- docs/design_decisions.md — architecture and design lock points
+- docs/experiments_log.md — full chronological experiment log
+- docs/experiments_summary.md — thesis-facing milestone summaries
+- docs/implementation-plan.md — implementation roadmap and phase tracking
