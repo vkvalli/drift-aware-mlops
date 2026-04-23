@@ -494,20 +494,29 @@ Gate outcome for locked run:
 - Gate 2: PASS (`update_accuracy_count_mean=8.67`)
 - Gate 3: PASS (`reward_mean` per-seed: `-0.0005`, `0.0016`, `0.0020`; all within neutral band)
 
-### Airline 120k Policy Comparison (single table)
+### Airline 120k Policy Comparison (master table, 6 seeds)
 
-Source artifact:
-- `runs/airline_120k_policy_comparison.csv`
+Source artifacts:
+- historical 3-seed table: `runs/airline_120k_policy_comparison.csv` (seeds `111,222,333`)
+- new baseline extension (`444,555,666`): `runs/airline_120k_baselines_extension/matrix_20260423_011838/summary.csv`
+- no-retrain backfill (`111,222,333`): `runs/airline_120k_noretrain_backfill/matrix_20260423_012319/summary.csv`
+- new LinUCB extension (`444,555,666`): `runs/airline_120k_seed_extension/matrix_20260422_221250/summary.csv`
+- consolidated master comparison: `runs/airline_120k_master_policy_comparison_6seeds.csv`
+- per-seed consolidated rows: `runs/airline_120k_master_per_seed_6seeds.csv`
+
+Master table (means over seeds `111,222,333,444,555,666`):
 
 | Policy | Mean Updates | Mean Action Rate | Mean Cost (USD) | Mean F1 | Mean Balanced Accuracy |
 | --- | --- | --- | --- | --- | --- |
-| fixed_interval (N=10) | 58.00 | 0.0991 | 87.00 | 0.1632 | 0.5091 |
-| threshold_persistence (T=1.8, K=3) | 67.00 | 0.1145 | 100.50 | 0.1541 | 0.4999 |
-| linucb (locked) | 8.67 | 0.0148 | 13.00 | 0.2166 | 0.5117 |
+| no_retrain | 0.00 | 0.0000 | 0.00 | 0.0000 | 0.5000 |
+| fixed_interval (N=10) | 58.00 | 0.0991 | 87.00 | 0.1698 | 0.5084 |
+| threshold_persistence (T=1.8, K=3) | 67.00 | 0.1145 | 100.50 | 0.1596 | 0.5002 |
+| linucb (locked) | 9.17 | 0.0157 | 13.75 | 0.2144 | 0.5065 |
 
 Interpretation:
-- Locked LinUCB is much lower-cost and lower-action-rate than rule baselines.
-- It is competitive on balanced accuracy and higher on mean F1 versus both baselines in this 120k setup.
+- With 6-seed aggregation, locked LinUCB remains much lower-cost and lower-action-rate than rule baselines.
+- Mean F1 remains higher for locked LinUCB than fixed-interval and threshold-persistence baselines.
+- Balanced accuracy remains close across retraining policies; no_retrain retains chance-level balanced accuracy.
 
 ### Cross-Dataset Metric-Reuse Sanity (anti-contamination check)
 
