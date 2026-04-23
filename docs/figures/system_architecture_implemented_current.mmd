@@ -1,0 +1,31 @@
+flowchart LR
+  D[Input Dataset Slices] --> O[Experiment Orchestrator]
+  O --> I[Replay / Ingestion]
+
+  subgraph S["Offline Event-Driven Pipeline (Implemented)"]
+    direction LR
+    I --> M[Monitor]
+    M --> P[Policy Agent]
+    P --> T[Trainer / Updater]
+    T --> R[Registry + Logger]
+  end
+
+  I -->|batch events| B[[stream_batch_jsonl]]
+  M -->|state events| S1[[stream_state_jsonl]]
+  P -->|action events| A[[stream_action_jsonl]]
+  T -->|cost + model_update events| O1[[stream_outcome_jsonl]]
+  I -->|delayed label events| L[[stream_label_jsonl]]
+
+  B --> C[Canonical Event Builder]
+  S1 --> C
+  A --> C
+  O1 --> C
+  L --> C
+  C --> E[Append-Only Canonical Timeline]
+
+  R --> H[(Artifacts + Policy Models)]
+
+  M -. validation failure .-> Q[[stream_dlq]]
+  P -. validation failure .-> Q
+  T -. validation failure .-> Q
+  Q --> R

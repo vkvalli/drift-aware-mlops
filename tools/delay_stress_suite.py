@@ -151,10 +151,19 @@ def _proxy_gap(events_path: Path, perf_key: str) -> float:
     return sum(gaps) / len(gaps)
 
 
-def _summarize_matrix(matrix_dir: Path, perf_key: str, out_csv: Path, dataset_name: str, delay: int) -> Dict[str, float]:
+def _summarize_matrix(
+    matrix_dir: Path, perf_key: str, out_csv: Path, dataset_name: str, delay: int
+) -> Dict[str, float]:
     summary_path = matrix_dir / "summary.csv"
     subprocess.check_call(
-        [sys.executable, "tools/aggregate_matrix.py", "--matrix-dir", str(matrix_dir), "--out", str(summary_path)]
+        [
+            sys.executable,
+            "tools/aggregate_matrix.py",
+            "--matrix-dir",
+            str(matrix_dir),
+            "--out",
+            str(summary_path),
+        ]
     )
 
     rows = list(csv.DictReader(summary_path.open("r", encoding="utf-8")))
@@ -166,8 +175,16 @@ def _summarize_matrix(matrix_dir: Path, perf_key: str, out_csv: Path, dataset_na
     for run_row in rows:
         run_name = run_row["run_name"]
         events_path = matrix_dir / run_name / "events.jsonl"
-        reward_means.append(_reward_mean(events_path, "f1_pre" if perf_key == "f1_mean" else "accuracy_pre"))
-        gaps.append(_proxy_gap(events_path, "f1_pre" if perf_key == "f1_mean" else "accuracy_pre"))
+        reward_means.append(
+            _reward_mean(
+                events_path, "f1_pre" if perf_key == "f1_mean" else "accuracy_pre"
+            )
+        )
+        gaps.append(
+            _proxy_gap(
+                events_path, "f1_pre" if perf_key == "f1_mean" else "accuracy_pre"
+            )
+        )
 
     def _mean(col: str) -> float:
         vals = [float(r[col]) for r in rows if r[col] not in {"NA", ""}]
@@ -196,7 +213,9 @@ def _summarize_matrix(matrix_dir: Path, perf_key: str, out_csv: Path, dataset_na
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run delayed-label stress suite for Electricity + Airline.")
+    parser = argparse.ArgumentParser(
+        description="Run delayed-label stress suite for Electricity + Airline."
+    )
     parser.add_argument("--out-csv", default="runs/delay_stress_summary.csv")
     parser.add_argument("--seeds", default="111,222,333")
     parser.add_argument("--delays", default="0,2,5,10")
@@ -212,7 +231,7 @@ def main() -> None:
     elec_csv = Path("data/electricity-normalized.csv")
     elec_model = Path("artifacts/policies/linucb_electricity_conservative.pkl")
 
-    airline_csv = Path("data/airline_2018_2019_model_ready_120k_labeled.csv")
+    airline_csv = Path("data/airline/airline_2018_2019.csv")
     airline_model = Path("artifacts/policies/linucb_airline_f1_alpha025_pen002.pkl")
 
     for d in delays:
@@ -234,7 +253,9 @@ def main() -> None:
             epsilon1_steps=30,
             epsilon2=0.02,
         )
-        metric = _summarize_matrix(elec_matrix, "accuracy_mean", out_csv, "electricity", d)
+        metric = _summarize_matrix(
+            elec_matrix, "accuracy_mean", out_csv, "electricity", d
+        )
         print("electricity", d, metric)
 
         airline_matrix = _run_matrix(

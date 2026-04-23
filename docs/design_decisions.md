@@ -21,7 +21,7 @@ Current implementation is offline-first and uses FileBus/JSONL between services:
 
 MVP Monitor (Offline, File-Based)
 
-The initial monitor implementation will be a minimal, offline component that reads JSONL events produced by replay. It consumes BatchEvent and LabelEvent records, maintains a sliding reference window of recent batch means, and emits a StateEvent per batch. Drift is a simple absolute mean shift between the current batch mean and the reference mean (single float drift_core), and we also log drift_max for debugging. The monitor logs StateEvents via the JSONL logger with event_type and logged_at fields, and uses the standard s_000001 ID prefix. perf_core and fairness_core are placeholders (0.0) in this MVP to keep the contract stable before full metrics are implemented. This offline monitor does not use Redis yet, but preserves the same event contracts and deterministic ordering so it can be swapped for the stream-based monitor later.
+The initial monitor implementation is an offline component that reads JSONL events produced by replay. It consumes BatchEvent and LabelEvent records, maintains a sliding reference window of recent batch means, and emits a StateEvent per batch. Drift is a simple absolute mean shift between the current batch mean and the reference mean (single float drift_core), and we also log drift_max for debugging. For text mode, drift is computed from document-length and vocabulary-entropy proxy shifts. The monitor logs StateEvents via the JSONL logger with event_type and logged_at fields, and uses the standard s_000001 ID prefix. perf_core remains a placeholder (0.0) in this MVP. fairness_core is now computed as a lagged fairness proxy (classification + protected attribute only), gated by support thresholds via fairness_ready/fairness_support to avoid unstable early-window signals. This offline monitor does not use Redis yet, but preserves the same event contracts and deterministic ordering so it can be swapped for the stream-based monitor later.
 
 Drift Calculation + Testing (MVP)
 
@@ -33,11 +33,11 @@ Testing uses a synthetic CSV with a known shift after batch K (e.g., K_shift_bat
 
 Offline Policy + Trainer Stub (MVP)
 
-Policy reads artifacts/states.jsonl and writes artifacts/actions.jsonl (JSONL). It applies a simple threshold rule: if drift_ready=true and drift_core >= T, action_type="fine_tune", else "defer". ActionEvent includes reason (e.g., "drift_threshold"), action_params (empty or {"threshold": T}), and requested_at timestamp. action_id is deterministic via IdCounter seeded by run metadata for replay stability.
+Policy reads artifacts/states.jsonl and writes artifacts/actions.jsonl (JSONL). Supported policy families are `no_retrain`, `fixed_interval`, `threshold_persistence`, `fairness_trigger`, and `linucb`. Threshold persistence remains the primary heuristic baseline; LinUCB is the learned policy path. ActionEvent includes `reason`, `action_params`, and `requested_at`, and action_id is deterministic via IdCounter seeded by run metadata for replay stability.
 
-Trainer reads artifacts/actions.jsonl and appends to the canonical artifacts/events.jsonl (preferred) using event_type="cost" and event_type="model_update". For every action it emits CostEvent with executed boolean and reason_code ("defer", "ok", "insufficient_data"). For fine_tune, cost fields use dummy non-zero values (train_time_s, estimated_$, kwh, co2_kg); for defer, zeros. ModelUpdateEvent is emitted only for fine_tune and includes executed=true and artifact_path; defer emits no ModelUpdateEvent. The trainer is idempotent: if an action_id is already seen, it skips re-execution and logs no new events.
+Trainer reads artifacts/actions.jsonl and appends to the canonical artifacts/events.jsonl (preferred) using event_type="cost" and event_type="model_update". For every action it emits CostEvent with `executed` and `reason_code` (e.g., "defer", "ok", "insufficient_data"). For `fine_tune`/`full_retrain`, cost fields use non-zero constants (`train_time_s`, `estimated_usd`, `energy_kwh`, `co2_kg`); for `defer`, zeros. ModelUpdateEvent is emitted for executed updates (`fine_tune` and `full_retrain`) and includes `update_id`, `new_model_version`, `artifact_path`, `eval_summary`, and `executed=true`; defer emits no ModelUpdateEvent. The trainer is idempotent: if an action_id is already seen, it skips re-execution and logs no new events.
 
-Tests (summary): Policy—given states.jsonl with drift above/below T, assert actions.jsonl contains expected action types, counts, and action.state_id matches. Trainer—CostEvent emitted for each action; ModelUpdateEvent only for fine_tune. End-to-end—replay → monitor → policy → trainer; assert event ordering (state → action → cost[/model_update]) and expected event counts in the canonical log.
+Tests (summary): Policy—given states.jsonl with drift/fairness signals, assert actions.jsonl contains expected action types, counts, and action.state_id matches for baseline and fairness-trigger policies. Trainer—CostEvent emitted for each action; ModelUpdateEvent only for executed updates (`fine_tune`/`full_retrain`). End-to-end—replay → monitor → policy → trainer; assert event ordering (state → action → cost[/model_update]) and expected event counts in the canonical log.
 
 Baseline behavior note: the threshold-only policy can over-trigger fine_tune (e.g., 86/100) and is used here primarily to exercise the pipeline. Future improvements will add cooldown rules, higher thresholds, or drift persistence (N consecutive windows) for more conservative behavior.
 Update: drift persistence is now supported via a consecutive-k rule (default K=3), which reduces fine_tune frequency in the offline ablation runs.
@@ -113,7 +113,7 @@ Event Schemas (minimal fields)
 
 batch
 - batch_id, window_id, timestamp_start, timestamp_end
-- label_available (bool), dataset_id
+- label_available (bool), label_delay_batches, dataset_id
 - model_version (current serving version)
 - schema_version
 
@@ -121,7 +121,7 @@ state
 - state_id, batch_id, window_id, timestamp
 - model_version, label_available
 - drift_core, drift_max, drift_ready
-- perf_core, fairness_core
+- perf_core, fairness_core, fairness_ready, fairness_support
 - schema_version
 
 Optional extensions (not part of locked schema) can be carried in additional fields for ablations, but the thesis baseline keeps the state contract compact and stable.
@@ -129,25 +129,28 @@ Optional extensions (not part of locked schema) can be carried in additional fie
 action
 - action_id, state_id
 - action_type = defer | fine_tune | full_retrain
-- model_version, schema_version
+- timestamp, model_version
+- reason, action_params, requested_at
+- schema_version
 
 model_update
-- action_id, new_model_version
-- artifact_path, training_data_window
-- eval_summary (key metrics)
+- update_id, action_id, timestamp
+- new_model_version
+- artifact_path
+- eval_summary (key metrics), executed
 - schema_version
 
 cost
-- action_id, train_time_s, estimated_$
-- kwh, co2_kg, latency_impact_ms
+- cost_id, action_id, timestamp
+- train_time_s, estimated_usd
+- energy_kwh, co2_kg
 - executed (bool)
-- reason_code (optional)
+- reason_code
 - schema_version
 
 label (optional / future)
 - label_id, batch_id
-- labels (or pointer)
-- timestamp_observed
+- timestamp
 - schema_version
 
 Validation + Idempotency
@@ -156,8 +159,9 @@ Validation + Idempotency
 - Registry+Logger writes a canonical log of all events; replay is driven by file offsets in offline mode (and stream IDs + consumer offsets in Redis mode).
 
 Observability Hooks
-- Monitor and Trainer export Prometheus metrics per event type (processing latency, error rate, action distribution).
-- Grafana dashboards show drift metrics, action counts, cost curves, and fairness proxy deltas.
+- Current implemented path: offline metrics are derived from canonical event logs and run summaries.
+- Prometheus instrumentation exists in the simple ingestion service and can be extended to monitor/policy/trainer in the Redis deployment path.
+- Grafana dashboards remain part of the target observability stack for stream-native deployment.
 
 Model Versioning Contract
 - Every event carries model_version (input lineage) or new_model_version (output lineage), preserving causal attribution for delayed rewards and post-hoc evaluation.
@@ -231,8 +235,8 @@ We optimize retraining decisions using multi-objective signals: accuracy, fairne
 Objective Vector (reported for every decision)
 - O_perf: model performance (accuracy/F1 when labels available; proxy metrics otherwise)
 - O_fair: fairness (DPD/EOD when labels available; proxy group-shift otherwise)
-- O_cost: compute cost (estimated_$, train time, latency impact)
-- O_energy: energy footprint (kwh, co2_kg)
+- O_cost: compute cost (estimated_usd, train_time_s)
+- O_energy: energy footprint (energy_kwh, co2_kg)
 
 Primary Reward (Phase-1 baseline)
 
@@ -295,7 +299,7 @@ Event Integrity Metrics
 
 Model Quality Metrics
 - O_perf and O_fair components over time (proxy vs ground-truth tracked separately).
-- Drift core trends (PSI_mean, PSI_max, or MMD).
+- Drift core trends (mean-shift proxy; text mode uses doc-length and vocabulary-entropy proxy).
 - Fairness proxy shift vs ground-truth deltas when labels arrive.
 
 Cost & Energy Metrics
@@ -327,7 +331,7 @@ Scope: validate correctness of drift metrics, fairness metrics, event schemas, a
 
 Unit Tests
 
-Drift metrics: PSI/KS/MMD calculations on synthetic shifts; verify monotonicity with shift magnitude.
+Drift metrics: mean-shift and text-proxy drift calculations on synthetic shifts; verify monotonicity with shift magnitude.
 
 Fairness metrics: DPD/EOD on toy datasets; verify behavior with sparse groups.
 
@@ -442,7 +446,7 @@ The synthetic appendix replays the same log with stochastic perturbations (e.g.,
 
 Evaluation Protocol — Baselines, Metrics, and Plots
 
-We compare the proposed policy against a full baseline set to cover standard practice, fairness-aware triggers, and cost-aware scheduling. Baselines include: (1) Fixed-interval retraining (e.g., every N windows), (2) Drift-threshold retraining (trigger when PSI/MMD exceeds a threshold), (3) No-retrain (serve last model), (4) Fairness-triggered retrain (trigger when DPD/EOD exceeds a threshold), and (5) Cost-aware retrain (trigger when a drift-utility score—expected performance gain minus retraining cost—exceeds a budgeted threshold). The fairness baseline uses static thresholds and does not account for cost or energy trade-offs. All baselines consume the same state core fields and budgets to keep comparisons consistent.
+We compare the proposed policy against a full baseline set to cover standard practice, fairness-aware triggers, and cost-aware scheduling. Baselines include: (1) Fixed-interval retraining (e.g., every N windows), (2) Drift-threshold retraining (trigger when drift_core exceeds a threshold, optionally with persistence K), (3) No-retrain (serve last model), (4) Fairness-triggered retrain (trigger when fairness_core exceeds threshold with hysteresis/cooldown), and (5) Cost-aware retrain (trigger when a drift-utility score—expected performance gain minus retraining cost—exceeds a budgeted threshold). The fairness baseline uses static thresholds and does not account for cost or energy trade-offs. All baselines consume the same state core fields and budgets to keep comparisons consistent.
 
 Metrics are reported at two levels: per-decision and aggregate over time. Per-decision metrics include the objective vector components (O_perf, O_fair, O_cost, O_energy), action type, cooldown status, and label delay. Aggregate metrics include cumulative cost/energy, average performance and fairness gaps, action frequency, and oscillation rate. We compute trade-off curves between accuracy/fairness and cost/energy, and report confidence intervals across random seeds and replay runs.
 
@@ -495,7 +499,7 @@ External validity is partially addressed through heterogeneous datasets and synt
 Construct Validity
 - Proxy metrics: fairness and performance proxies under label delay may not align with ground-truth outcomes.
 - Objective weighting: scalarized rewards may obscure trade-offs despite reporting vector metrics.
-- Drift metrics: PSI/MMD thresholds may not capture all operationally relevant shifts.
+- Drift proxy choice: simple drift_core thresholds may not capture all operationally relevant shifts.
 
 We mitigate construct validity risks by reporting both proxy and ground-truth metrics and by analyzing directional rather than absolute effects.
 
@@ -531,6 +535,7 @@ To support regression, text, and fairness evaluation with one pipeline, runtime 
 - `feature_mode`: `tabular | tfidf`
 - `perf_direction`: `higher_better | lower_better`
 - `protected_attr` (optional) for fairness diagnostics
+- `fine_tune_window_batches` (default `1`) to control how many recent batches are used for a `fine_tune` action
 
 Implementation scope clarifications:
 - Text path currently supports TF-IDF features only (`feature_mode=tfidf`).
@@ -552,6 +557,13 @@ Fairness integration status (updated 2026-04-10 / 2026-04-11):
   - model loader supports both 4-feature legacy and 6-feature fairness-aware vectors.
 - Current thesis lock keeps fairness shaping optional (not forced default) because Step-1 Adult A/B sweeps changed reward values but did not yet change action behavior under conservative evaluation settings.
 - Fairness-trigger policy family remains the deterministic safety/control path for direct fairness-driven actions.
+- Fairness results are framed as cost-aware controlled operation and reliable fairness diagnostics, not as claims based on tiny F1 deltas.
+
+AG News real-data calibration lock (updated 2026-04-12):
+- Real AG News path uses HF dataset preparation into `data/ag_news_real.csv` with TF-IDF features.
+- Update-effectiveness lock: `fine_tune_window_batches=3`.
+- RL cost-efficient operating point: `epsilon2=0.22` (near fixed-interval F1 with lower cost/action rate).
+- RL matched-budget check: `epsilon2=0.26` (comparable update budget to fixed interval, competitive F1/accuracy).
 
 ## Current Architecture Lock (2026-04-11)
 
@@ -582,4 +594,4 @@ Deployment note:
 | 2026-03 | Added delayed-label stress suite across Electricity/Airline | Validated policy stability under varying label-lag conditions. |
 | 2026-03 | Added multi-modal task support (regression/text/fairness benchmark) | Generalized architecture beyond one tabular dataset. |
 | 2026-04 | Fairness Step-1 in RL (`w_fair`, `fairness_gap`, `fair_norm`, fairness-aware features) | Fairness objective became executable in RL pipeline; currently optional pending stronger behavior-identifiability evidence. |
-
+| 2026-04 | Added `fine_tune_window_batches` and AG News real-data calibration lock | Increased text-update effectiveness; enabled RL near-parity F1 at lower cost on AG News real dataset. |

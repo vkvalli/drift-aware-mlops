@@ -303,7 +303,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### What Changed
 - data/adult.csv
-- runs/adult_openml_smoke_20260306_024613/events.jsonl
+- runs/adult_smoke_20260306_024613/events.jsonl
 - runs/matrix_20260306_024630/summary.csv
 - runs/matrix_20260306_024630/plots/fairness_tradeoff.png
 
@@ -313,7 +313,7 @@ Pick California Housing first (fastest to integrate), then if time allows add Am
 
 ### What To Verify
 - .venv/bin/python tools/prepare_adult.py --out data/adult.csv --target-column income --rows 60000
-- .venv/bin/python -m src.runner.offline_run --csv data/adult.csv --task classification --label-column income --target-column income --protected-attr sex --dataset-id adult_openml --window-size 200 --max-rows 40000 --label-delay-batches 2 --seed 111 --replay-output runs/adult_openml_smoke_20260306_024613/replay.jsonl --state-output runs/adult_openml_smoke_20260306_024613/state.jsonl --actions-output runs/adult_openml_smoke_20260306_024613/actions.jsonl --trainer-output runs/adult_openml_smoke_20260306_024613/trainer_output.jsonl --canonical-output runs/adult_openml_smoke_20260306_024613/events.jsonl --processed-index-file runs/adult_openml_smoke_20260306_024613/processed_actions.jsonl --dlq runs/adult_openml_smoke_20260306_024613/dlq.jsonl
+- .venv/bin/python -m src.runner.offline_run --csv data/adult.csv --task classification --label-column income --target-column income --protected-attr sex --dataset-id adult_openml --window-size 200 --max-rows 40000 --label-delay-batches 2 --seed 111 --replay-output runs/adult_smoke_20260306_024613/replay.jsonl --state-output runs/adult_smoke_20260306_024613/state.jsonl --actions-output runs/adult_smoke_20260306_024613/actions.jsonl --trainer-output runs/adult_smoke_20260306_024613/trainer_output.jsonl --canonical-output runs/adult_smoke_20260306_024613/events.jsonl --processed-index-file runs/adult_smoke_20260306_024613/processed_actions.jsonl --dlq runs/adult_smoke_20260306_024613/dlq.jsonl
 - .venv/bin/python tools/aggregate_matrix.py --matrix-dir runs/matrix_20260306_024630 --out runs/matrix_20260306_024630/summary.csv
 - .venv/bin/python tools/plot_fairness_tradeoff.py --summary runs/matrix_20260306_024630/summary.csv --out runs/matrix_20260306_024630/plots/fairness_tradeoff.png
 

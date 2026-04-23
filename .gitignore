@@ -38,3 +38,4 @@ __pycache__/
 .ruff_cache/
 .venv/
 .env
+node_modules

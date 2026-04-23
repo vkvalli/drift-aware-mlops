@@ -659,7 +659,7 @@ Setup:
 - primary metrics: `accuracy`, `F1`, fairness (`DPD`, `EOD`)
 
 Artifacts:
-- smoke run: `runs/adult_openml_smoke_20260306_024613/events.jsonl`
+- smoke run: `runs/adult_smoke_20260306_024613/events.jsonl`
 - matrix summary: `runs/matrix_20260306_024630/summary.csv`
 - fairness plot: `runs/matrix_20260306_024630/plots/fairness_tradeoff.png`
 
@@ -724,23 +724,23 @@ Interpretation (current state):
 <!-- FAIRNESS_RL_STEP1_END -->
 
 <!-- COMPLETE_RUN_REGISTRY_START -->
-## Complete Run Inventory (All Local `runs/` Folders)
+## Run Inventory Snapshot (`runs/` Folders)
 
-This inventory is machine-generated from the current workspace to ensure every run folder is documented (including incomplete or events-only runs).
+This inventory is a snapshot table captured from local workspace metadata and includes incomplete/events-only runs.
 
-### Comprehensive Run Registry (All `runs/` folders)
+### Run Registry Snapshot
 
-Generated on 2026-04-11 from local workspace. `status=summary` uses `<run>/summary.csv`; `custom_summary` uses run-specific comparison CSVs; `events_nested` means event logs exist in subfolders but no top-level summary.
+Generated on 2026-04-22 from local workspace. `status=summary` uses `<run>/summary.csv`; `custom_summary` uses run-specific comparison CSVs; `events_nested` means event logs exist in subfolders but no top-level summary.
 
 | run_dir | kind | status | task | policies | seeds | action_rate_mean | updates_mean | cost_mean | f1_mean | bal_acc_mean | dpd_mean | eod_mean | source |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| adult_rl_check_20260409_163119 | run | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/adult_rl_check_20260409_163119/linucb_eval/events.jsonl |
+| adult_rl_check_20260409_163119 | run | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/adult_rl_check_20260409_163119/base_threshold/events.jsonl |
 | adult_rl_covboost_20260410_173352 | run | custom_summary | classification | linucb | 111,222,333 | 0.0217 | 4.3333 | 6.5000 | 0.3472 | 0.4996 | 0.0065 | 0.0132 | runs/adult_rl_covboost_20260410_173352/coverage_boost_ab_summary.csv |
-| adult_rl_fair_compare_20260410_160204 | run | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/adult_rl_fair_compare_20260410_160204/train_base/events.jsonl |
+| adult_rl_fair_compare_20260410_160204 | run | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/adult_rl_fair_compare_20260410_160204/matrix_nofair/matrix_20260410_160258/policy=linucb_seed111/events.jsonl |
 | adult_rl_step1_compare_20260410_165138 | run | custom_summary | classification | linucb | 111,222,333 | 0.0233 | 4.6667 | 7.0000 | 0.3231 | 0.4996 | 0.0113 | 0.0216 | runs/adult_rl_step1_compare_20260410_165138/step1_comparison.csv |
 | adult_rl_wfair_sweep_20260410_160828 | run | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/adult_rl_wfair_sweep_20260410_160828/train_base/events.jsonl |
 | adult_rl_wfair_sweep_20260410_160926 | run | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/adult_rl_wfair_sweep_20260410_160926/train_base/events.jsonl |
-| adult_rl_wfair_sweep_20260410_161019 | run | custom_summary | classification | linucb | 111,222,333 | NA | NA | NA | 0.3472 | NA | 0.0065 | 0.0132 | runs/adult_rl_wfair_sweep_20260410_161019/wfair_sweep_summary.csv |
+| adult_rl_wfair_sweep_20260410_161019 | run | custom_summary | classification | linucb | 111,222,333 | 0.0217 | 4.3333 | 6.5000 | 0.3472 | 0.4996 | 0.0065 | 0.0132 | runs/adult_rl_wfair_sweep_20260410_161019/wfair_sweep_summary.csv |
 | adult_smoke_20260306_024613 | run | events_only | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/adult_smoke_20260306_024613/events.jsonl |
 | agnews_smoke_20260306_023942 | run | events_only | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/agnews_smoke_20260306_023942/events.jsonl |
 | agnews_smoke_20260306_024442 | run | events_only | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/agnews_smoke_20260306_024442/events.jsonl |
@@ -748,7 +748,7 @@ Generated on 2026-04-11 from local workspace. `status=summary` uses `<run>/summa
 | compare_k | run | incomplete | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA |
 | matrix_20260211_030037 | matrix | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/matrix_20260211_030037/policy=no_retrain_seed111/events.jsonl |
 | matrix_20260211_030048 | matrix | summary | NA | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0400 | NA | 1.5000 | NA | NA | NA | NA | runs/matrix_20260211_030048/summary.csv |
-| matrix_20260211_044704 | matrix | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/matrix_20260211_044704/policy=no_retrain_seed222/events.jsonl |
+| matrix_20260211_044704 | matrix | events_nested | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/matrix_20260211_044704/policy=fixed_interval_N10_cd0_seed111/events.jsonl |
 | matrix_20260211_044718 | matrix | summary | NA | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0720 | NA | 2.7000 | NA | NA | NA | NA | runs/matrix_20260211_044718/summary.csv |
 | matrix_20260211_052716 | matrix | summary | NA | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0720 | NA | 2.7000 | NA | NA | NA | NA | runs/matrix_20260211_052716/summary.csv |
 | matrix_20260211_061018 | matrix | summary | NA | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0720 | NA | 2.7000 | NA | NA | NA | NA | runs/matrix_20260211_061018/summary.csv |
@@ -813,7 +813,40 @@ Generated on 2026-04-11 from local workspace. `status=summary` uses `<run>/summa
 | matrix_20260306_023959 | matrix | summary | text_classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0200 | 6.0000 | 9.0000 | 0.2752 | 0.3960 | NA | NA | runs/matrix_20260306_023959/summary.csv |
 | matrix_20260306_024457 | matrix | summary | text_classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0200 | 6.0000 | 9.0000 | 0.2752 | 0.3960 | NA | NA | runs/matrix_20260306_024457/summary.csv |
 | matrix_20260306_024630 | matrix | summary | classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.6040 | 181.2000 | 271.8000 | 0.2054 | 0.5001 | 0.0096 | 0.0173 | runs/matrix_20260306_024630/summary.csv |
-| pareto | run | incomplete | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA |
+| matrix_20260411_180017 | matrix | summary | classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.1060 | 10.6000 | 15.9000 | 0.3187 | 0.5648 | 0.0000 | 0.0000 | runs/matrix_20260411_180017/summary.csv |
+| matrix_20260411_180125 | matrix | summary | classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.6040 | 181.2000 | 271.8000 | 0.2054 | 0.5001 | 0.0096 | 0.0173 | runs/matrix_20260411_180125/summary.csv |
+| matrix_20260411_192901 | matrix | summary | text_classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0200 | 6.0000 | 9.0000 | NA | NA | NA | NA | runs/matrix_20260411_192901/summary.csv |
+| matrix_20260411_193411 | matrix | summary | text_classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0200 | 6.0000 | 9.0000 | 0.2752 | 0.3960 | NA | NA | runs/matrix_20260411_193411/summary.csv |
+| matrix_20260411_195021 | matrix | summary | text_classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.4560 | 136.8000 | 205.2000 | 0.6770 | 0.7118 | NA | NA | runs/matrix_20260411_195021/summary.csv |
+| matrix_20260411_203913 | matrix | summary | text_classification | threshold_persistence | 111 | 0.7967 | 239.0000 | 358.5000 | 0.8281 | 0.8350 | NA | NA | runs/matrix_20260411_203913/summary.csv |
+| matrix_20260411_204117 | matrix | summary | text_classification | threshold_persistence | 111 | 0.2208 | 66.2500 | 99.3750 | 0.7789 | 0.7902 | NA | NA | runs/matrix_20260411_204117/summary.csv |
+| matrix_20260411_204223 | matrix | summary | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/matrix_20260411_204223/summary.csv |
+| matrix_20260411_204338 | matrix | summary | text_classification | threshold_persistence | 111 | 0.1172 | 35.1667 | 52.7500 | 0.7834 | 0.7946 | NA | NA | runs/matrix_20260411_204338/summary.csv |
+| matrix_20260411_204523 | matrix | summary | text_classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0678 | 20.3333 | 30.5000 | 0.5586 | 0.6141 | NA | NA | runs/matrix_20260411_204523/summary.csv |
+| matrix_20260411_204617 | matrix | summary | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/matrix_20260411_204617/summary.csv |
+| matrix_20260411_204746 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0189 | 5.6667 | 8.5000 | 0.7434 | 0.7485 | NA | NA | runs/matrix_20260411_204746/summary.csv |
+| matrix_20260411_204913 | matrix | summary | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/matrix_20260411_204913/summary.csv |
+| matrix_20260411_214646 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0211 | 6.3333 | 9.5000 | 0.7470 | 0.7524 | NA | NA | runs/matrix_20260411_214646/summary.csv |
+| matrix_20260411_214741 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0278 | 8.3333 | 12.5000 | 0.7562 | 0.7615 | NA | NA | runs/matrix_20260411_214741/summary.csv |
+| matrix_20260412_034648 | matrix | summary | text_classification | linucb | 111,222,333 | 0.3922 | 117.6667 | 176.5000 | 0.8292 | 0.8330 | NA | NA | runs/matrix_20260412_034648/summary.csv |
+| matrix_20260412_034749 | matrix | summary | text_classification | linucb | 111 | 0.3833 | 115.0000 | 172.5000 | 0.8243 | 0.8291 | NA | NA | runs/matrix_20260412_034749/summary.csv |
+| matrix_20260412_034833 | matrix | summary | text_classification | linucb | 111 | 0.0267 | 8.0000 | 12.0000 | 0.7497 | 0.7554 | NA | NA | runs/matrix_20260412_034833/summary.csv |
+| matrix_20260412_034846 | matrix | summary | text_classification | linucb | 111 | 0.0267 | 8.0000 | 12.0000 | 0.7497 | 0.7554 | NA | NA | runs/matrix_20260412_034846/summary.csv |
+| matrix_20260412_034905 | matrix | summary | text_classification | linucb | 111 | 0.0267 | 8.0000 | 12.0000 | 0.7497 | 0.7554 | NA | NA | runs/matrix_20260412_034905/summary.csv |
+| matrix_20260412_034926 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0533 | 16.0000 | 24.0000 | 0.7645 | 0.7696 | NA | NA | runs/matrix_20260412_034926/summary.csv |
+| matrix_20260412_035015 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0767 | 23.0000 | 34.5000 | 0.7820 | 0.7872 | NA | NA | runs/matrix_20260412_035015/summary.csv |
+| matrix_20260412_035108 | matrix | summary | text_classification | linucb | 111,222,333 | 0.1178 | 35.3333 | 53.0000 | 0.7913 | 0.7965 | NA | NA | runs/matrix_20260412_035108/summary.csv |
+| matrix_20260412_035157 | matrix | summary | text_classification | linucb | 111,222,333 | 0.1378 | 41.3333 | 62.0000 | 0.7947 | 0.7998 | NA | NA | runs/matrix_20260412_035157/summary.csv |
+| matrix_20260412_233030 | matrix | summary | text_classification | fixed_interval,no_retrain,threshold_persistence | 111,222,333 | 0.0678 | 20.3333 | 30.5000 | 0.5856 | 0.6409 | NA | NA | runs/matrix_20260412_233030/summary.csv |
+| matrix_20260412_233311 | matrix | summary | text_classification | linucb | 111 | 0.0333 | 10.0000 | 15.0000 | 0.8278 | 0.8322 | NA | NA | runs/matrix_20260412_233311/summary.csv |
+| matrix_20260412_233326 | matrix | summary | text_classification | linucb | 111 | 0.0433 | 13.0000 | 19.5000 | 0.8331 | 0.8376 | NA | NA | runs/matrix_20260412_233326/summary.csv |
+| matrix_20260412_233340 | matrix | summary | text_classification | linucb | 111 | 0.0733 | 22.0000 | 33.0000 | 0.8402 | 0.8450 | NA | NA | runs/matrix_20260412_233340/summary.csv |
+| matrix_20260412_233404 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0767 | 23.0000 | 34.5000 | 0.8394 | 0.8443 | NA | NA | runs/matrix_20260412_233404/summary.csv |
+| matrix_20260412_233503 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0833 | 25.0000 | 37.5000 | 0.8406 | 0.8454 | NA | NA | runs/matrix_20260412_233503/summary.csv |
+| matrix_20260412_233604 | matrix | summary | text_classification | linucb | 111,222,333 | 0.0911 | 27.3333 | 41.0000 | 0.8399 | 0.8448 | NA | NA | runs/matrix_20260412_233604/summary.csv |
+| matrix_20260412_233702 | matrix | summary | text_classification | linucb | 111,222,333 | 0.1089 | 32.6667 | 49.0000 | 0.8410 | 0.8458 | NA | NA | runs/matrix_20260412_233702/summary.csv |
+| matrix_20260413_000038 | matrix | summary | text_classification | linucb | 111,222,333 | 0.1034 | 31.0000 | 46.5000 | 0.8402 | 0.8450 | NA | NA | runs/matrix_20260413_000038/summary.csv |
+| pareto | run | custom_summary | NA | fixed_interval (N=10),linucb (norm+penalty+bonus),threshold_persistence (K=5) | NA | NA | NA | NA | NA | NA | NA | NA | runs/pareto/policy_comparison_norm_penalty_bonus.csv |
 | run_seed_111 | run | events_only | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/run_seed_111/events.jsonl |
 | run_seed_111_time_excluded_lower | run | events_only | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/run_seed_111_time_excluded_lower/events.jsonl |
 | run_seed_111_time_excluded_thr001 | run | events_only | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | runs/run_seed_111_time_excluded_thr001/events.jsonl |

@@ -1,0 +1,28 @@
+flowchart LR
+  C[Input Dataset] --> U[Orchestrator]
+
+  subgraph S[Service Pipeline]
+    direction LR
+    R[Replay] --> M[Monitor]
+    M --> P[Policy Agent]
+    P --> T[Trainer]
+  end
+
+  U --> R
+  U --> G[Canonical Event Builder]
+
+  R --> B[Batch Stream]
+  M --> S1[State Stream]
+  P --> A[Decision Stream]
+  T --> O[Outcome Stream]
+
+  B --> G
+  S1 --> G
+  A --> G
+  O --> G
+  G --> E[Canonical Event Timeline]
+
+  R -. validation failure .-> D[DLQ / Error Event Log]
+  M -. validation failure .-> D
+  P -. validation failure .-> D
+  T -. validation failure .-> D
