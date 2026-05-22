@@ -1,0 +1,30 @@
+.node rect,
+.node polygon,
+.node circle,
+.node ellipse,
+.node path,
+.label-container {
+  fill: #ffffff !important;
+  stroke: #1f2937 !important;
+  stroke-width: 1.6px !important;
+}
+.edgePath path {
+  stroke: #374151 !important;
+  stroke-width: 1.3px !important;
+}
+.label, .nodeLabel, .edgeLabel {
+  color: #111827 !important;
+  fill: #111827 !important;
+  font-family: "Times New Roman", Times, serif !important;
+}
+.nodeLabel p,
+.nodeLabel span,
+.edgeLabel p,
+.edgeLabel span {
+  font-size: 22px !important;
+  line-height: 1.35 !important;
+}
+.edgeLabel rect {
+  fill: #ffffff !important;
+  opacity: 1 !important;
+}
